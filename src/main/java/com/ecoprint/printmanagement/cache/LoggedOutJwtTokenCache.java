@@ -17,7 +17,6 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
-import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -31,15 +30,13 @@ import net.jodah.expiringmap.ExpiringMap;
  * This cache helps maintain a state to invalidate tokens post a successful logout operation.
  * Since JWT tokens are immutable, they'd still remain accessible post logout as long as the token
  * doesn't expire.
- * <p>
+ * 
  * Note: To prevent this cache from building up indefinitely, we set a max size. The TTL for each
  * token will be the number of seconds that remain until its expiry. This is done as an optimization
  * as once a JWT token expires, it cannot be used anyway.
  */
 @Component
 public class LoggedOutJwtTokenCache {
-
-//    private static final Logger logger = Logger.getLogger(LoggedOutJwtTokenCache.class);
 
     private final ExpiringMap<String, OnUserLogoutSuccessEvent> tokenEventMap;
     private final JwtTokenProvider tokenProvider;
@@ -53,23 +50,36 @@ public class LoggedOutJwtTokenCache {
                 .build();
     }
 
+    /**
+     * Marks the logout event for the specified token in the cache.
+     * 
+     * @param event The logout event to be cached.
+     */
     public void markLogoutEventForToken(OnUserLogoutSuccessEvent event) {
         String token = event.getToken();
-        if (tokenEventMap.containsKey(token)) {
-//            logger.info(String.format("Log out token for user [%s] is already present in the cache", event.getUserEmail()));
-
-        } else {
+        if (!tokenEventMap.containsKey(token)) {
             Date tokenExpiryDate = tokenProvider.getTokenExpiryFromJWT(token);
             long ttlForToken = getTTLForToken(tokenExpiryDate);
-//            logger.info(String.format("Logout token cache set for [%s] with a TTL of [%s] seconds. Token is due expiry at [%s]", event.getUserEmail(), ttlForToken, tokenExpiryDate));
             tokenEventMap.put(token, event, ttlForToken, TimeUnit.SECONDS);
         }
     }
 
+    /**
+     * Retrieves the logout event associated with the specified token.
+     * 
+     * @param token The token for which to retrieve the logout event.
+     * @return The logout event, or null if not found.
+     */
     public OnUserLogoutSuccessEvent getLogoutEventForToken(String token) {
         return tokenEventMap.get(token);
     }
 
+    /**
+     * Calculates the time-to-live (TTL) for the token based on its expiry date.
+     * 
+     * @param date The expiry date of the token.
+     * @return The TTL in seconds.
+     */
     private long getTTLForToken(Date date) {
         long secondAtExpiry = date.toInstant().getEpochSecond();
         long secondAtLogout = Instant.now().getEpochSecond();

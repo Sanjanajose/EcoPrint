@@ -13,50 +13,26 @@
  */
 package com.ecoprint.printmanagement.security;
 
-<<<<<<< HEAD
-import java.time.Instant;
-import java.util.Arrays;
-=======
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Base64;
->>>>>>> 982c1c6 (Initial commit)
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
-<<<<<<< HEAD
-=======
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 
 import org.springframework.beans.factory.annotation.Autowired;
->>>>>>> 982c1c6 (Initial commit)
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
 import com.ecoprint.printmanagement.model.CustomUserDetails;
-<<<<<<< HEAD
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-
-@Component
-public class JwtTokenProvider {
-
-    private static final String AUTHORITIES_CLAIM = "authorities";
-    private final String jwtSecret;
-    private final long jwtExpirationInMs;
-
-    public JwtTokenProvider(@Value("${app.jwt.secret}") String jwtSecret, @Value("${app.jwt.expiration}") long jwtExpirationInMs) {
-        this.jwtSecret = jwtSecret;
-=======
 import com.ecoprint.printmanagement.model.token.JwtKey;
 import com.ecoprint.printmanagement.repository.JwtKeyRepository;
 
@@ -75,8 +51,7 @@ public class JwtTokenProvider {
     private static final String AUTHORITIES_CLAIM = "authorities";
     private final long jwtExpirationInMs;
 
-    public JwtTokenProvider(@Value("${app.jwt.expiration}") long jwtExpirationInMs) {
->>>>>>> 982c1c6 (Initial commit)
+    public JwtTokenProvider(@Value("${app.jwt.secret}") String jwtSecret, @Value("${app.jwt.expiration}") long jwtExpirationInMs) {
         this.jwtExpirationInMs = jwtExpirationInMs;
     }
 
@@ -91,26 +66,21 @@ public class JwtTokenProvider {
                 .setSubject(Long.toString(customUserDetails.getId()))
                 .setIssuedAt(Date.from(Instant.now()))
                 .setExpiration(Date.from(expiryDate))
-<<<<<<< HEAD
-                .signWith(SignatureAlgorithm.HS512, jwtSecret)
-                .claim(AUTHORITIES_CLAIM, authorities)
-                .compact();
-    }
-=======
                 .signWith(getSignInKey())
                 .claim(AUTHORITIES_CLAIM, authorities)
                 .compact();
     }
     
     public Key getSignInKey() {
-    	byte[] keyBytes = null;
+    	byte[] keyBytes;
     	try {
 			keyBytes = Decoders.BASE64.decode(getLatestKey());
 		} catch (DecodingException | NoSuchAlgorithmException e) {
-			e.printStackTrace();
+			e.printStackTrace(); // Consider using a logger instead of printStackTrace for production code
+			return null; // Handle error properly in production
 		}
     	return Keys.hmacShaKeyFor(keyBytes);   
-    	}
+    }
     
     public String generateAndSaveKey() throws NoSuchAlgorithmException {
     	KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA256");
@@ -130,7 +100,6 @@ public class JwtTokenProvider {
     	JwtKey jwtKey = jwtKeyRepository.findTopByOrderByCreatedAtDesc();
     	return jwtKey != null ? jwtKey.getSecretKey() : generateAndSaveKey();
     }
->>>>>>> 982c1c6 (Initial commit)
 
     /**
      * Generates a token from a principal object. Embed the refresh token in the jwt
@@ -142,11 +111,7 @@ public class JwtTokenProvider {
                 .setSubject(Long.toString(userId))
                 .setIssuedAt(Date.from(Instant.now()))
                 .setExpiration(Date.from(expiryDate))
-<<<<<<< HEAD
-                .signWith(SignatureAlgorithm.HS512, jwtSecret)
-=======
                 .signWith(getSignInKey())
->>>>>>> 982c1c6 (Initial commit)
                 .compact();
     }
 
@@ -154,14 +119,9 @@ public class JwtTokenProvider {
      * Returns the user id encapsulated within the token
      */
     public Long getUserIdFromJWT(String token) {
-<<<<<<< HEAD
-        Claims claims = Jwts.parser()
-                .setSigningKey(jwtSecret)
-=======
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSignInKey())
                 .build()
->>>>>>> 982c1c6 (Initial commit)
                 .parseClaimsJws(token)
                 .getBody();
 
@@ -172,14 +132,9 @@ public class JwtTokenProvider {
      * Returns the token expiration date encapsulated within the token
      */
     public Date getTokenExpiryFromJWT(String token) {
-<<<<<<< HEAD
-        Claims claims = Jwts.parser()
-                .setSigningKey(jwtSecret)
-=======
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSignInKey())
                 .build()
->>>>>>> 982c1c6 (Initial commit)
                 .parseClaimsJws(token)
                 .getBody();
 
@@ -198,14 +153,9 @@ public class JwtTokenProvider {
      * Return the jwt authorities claim encapsulated within the token
      */
     public List<GrantedAuthority> getAuthoritiesFromJWT(String token) {
-<<<<<<< HEAD
-        Claims claims = Jwts.parser()
-                .setSigningKey(jwtSecret)
-=======
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSignInKey())
                 .build()
->>>>>>> 982c1c6 (Initial commit)
                 .parseClaimsJws(token)
                 .getBody();
         return Arrays.stream(claims.get(AUTHORITIES_CLAIM).toString().split(","))
@@ -223,5 +173,4 @@ public class JwtTokenProvider {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
     }
-
 }

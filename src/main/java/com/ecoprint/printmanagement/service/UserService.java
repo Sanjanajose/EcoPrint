@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 /*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +13,10 @@
  */
 package com.ecoprint.printmanagement.service;
 
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
-
-import org.slf4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-
-import com.ecoprint.printmanagement.annotation.CurrentUser;
-=======
-package com.ecoprint.printmanagement.service;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashSet;
 import java.util.Optional;
@@ -44,61 +34,35 @@ import com.ecoprint.printmanagement.annotation.CurrentUser;
 import com.ecoprint.printmanagement.exception.FileUploadException;
 import com.ecoprint.printmanagement.exception.ResourceAlreadyInUseException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
->>>>>>> 982c1c6 (Initial commit)
 import com.ecoprint.printmanagement.exception.SetAdminAccessException;
 import com.ecoprint.printmanagement.exception.UserLogoutException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.Role;
-<<<<<<< HEAD
-=======
 import com.ecoprint.printmanagement.model.RoleName;
->>>>>>> 982c1c6 (Initial commit)
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserDevice;
 import com.ecoprint.printmanagement.model.payload.LogOutRequest;
 import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.repository.UserRepository;
 
-<<<<<<< HEAD
-@Service
-public class UserService {
-
-//    private static final Logger logger = Logger.getLogger(UserService.class);
-=======
-
-import java.io.IOException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import org.springframework.web.multipart.MultipartFile;
-import java.util.UUID;
 import net.coobird.thumbnailator.Thumbnails;
 
-
-
+import java.io.IOException;
+import java.util.UUID;
 
 @Service
 public class UserService {
 
->>>>>>> 982c1c6 (Initial commit)
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final RoleService roleService;
     private final UserDeviceService userDeviceService;
     private final RefreshTokenService refreshTokenService;
-<<<<<<< HEAD
-
-    @Autowired
-    public UserService(PasswordEncoder passwordEncoder, UserRepository userRepository, RoleService roleService, UserDeviceService userDeviceService, RefreshTokenService refreshTokenService) {
-=======
     private static final Set<String> ALLOWED_FILE_FORMATS = Set.of("jpg", "jpeg", "png");
 
     @Autowired
-    public UserService(PasswordEncoder passwordEncoder, UserRepository userRepository, RoleService roleService, 
+    public UserService(PasswordEncoder passwordEncoder, UserRepository userRepository, RoleService roleService,
                         UserDeviceService userDeviceService, RefreshTokenService refreshTokenService) {
->>>>>>> 982c1c6 (Initial commit)
         this.passwordEncoder = passwordEncoder;
         this.userRepository = userRepository;
         this.roleService = roleService;
@@ -107,38 +71,20 @@ public class UserService {
     }
 
     /**
-<<<<<<< HEAD
-     * Finds a user in the database by username
-=======
      * Finds a user by username
->>>>>>> 982c1c6 (Initial commit)
      */
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
     }
 
     /**
-<<<<<<< HEAD
-     * Finds a user in the database by email
-=======
      * Finds a user by email
->>>>>>> 982c1c6 (Initial commit)
      */
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }
 
     /**
-<<<<<<< HEAD
-     * Find a user in db by id.
-     */
-    public Optional<User> findById(Long Id) {
-        return userRepository.findById(Id);
-    }
-
-    /**
-     * Save the user to the database
-=======
      * Finds a user by id
      */
     public Optional<User> findById(Long id) {
@@ -147,69 +93,28 @@ public class UserService {
 
     /**
      * Saves the user to the database
->>>>>>> 982c1c6 (Initial commit)
      */
     public User save(User user) {
         return userRepository.save(user);
     }
 
     /**
-<<<<<<< HEAD
-     * Check is the user exists given the email: naturalId
-=======
      * Checks if a user with the given email exists
->>>>>>> 982c1c6 (Initial commit)
      */
     public Boolean existsByEmail(String email) {
         return userRepository.existsByEmail(email);
     }
 
     /**
-<<<<<<< HEAD
-     * Check is the user exists given the username: naturalId
-=======
      * Checks if a user with the given username exists
->>>>>>> 982c1c6 (Initial commit)
      */
     public Boolean existsByUsername(String username) {
         return userRepository.existsByUsername(username);
     }
 
-<<<<<<< HEAD
-
     /**
      * Creates a new user from the registration request
      */
-    public User createUser(RegistrationRequest registerRequest) {
-        User newUser = new User();
-        Boolean isNewUserAsAdmin = registerRequest.getRegisterAsAdmin();
-        newUser.setEmail(registerRequest.getEmail());
-        newUser.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
-        newUser.setUsername(registerRequest.getUsername());
-        newUser.addRoles(getRolesForNewUser(isNewUserAsAdmin));
-        newUser.setActive(true);
-        newUser.setEmailVerified(false);
-        return newUser;
-    }
-
-    /**
-     * Performs a quick check to see what roles the new user could be assigned to.
-     *
-     * @return list of roles for the new user
-     */
-    private Set<Role> getRolesForNewUser(Boolean isToBeMadeAdmin) {
-        Set<Role> newUserRoles = new HashSet<>(roleService.findAll());
-        if (!isToBeMadeAdmin) {
-            newUserRoles.removeIf(Role::isAdminRole);
-        }
-//        logger.info("Setting user roles: " + newUserRoles);
-        return newUserRoles;
-    }
-
-    /**
-     * Log the given user out and delete the refresh token associated with it. If no device
-     * id is found matching the database for this user, throw a log out exception.
-=======
     public User createUser(RegistrationRequest registerRequest) {
         // Check if the email is unique
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
@@ -226,15 +131,11 @@ public class UserService {
 
         // Proceed with creating the user
         User newUser = new User();
-        
-        // Assuming the RegistrationRequest has a field to determine if it's a new admin
         Boolean isNewUserAsAdmin = registerRequest.getRegisterAsAdmin();
 
         newUser.setEmail(registerRequest.getEmail());
         newUser.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
         newUser.setUsername(registerRequest.getUsername());
-        
-        // Assign roles based on the user type
         newUser.setRoles(getRolesForNewUser(isNewUserAsAdmin)); // This method should handle role assignment
 
         newUser.setActive(true);
@@ -248,8 +149,6 @@ public class UserService {
 
         return userRepository.save(newUser);
     }
-
-
 
     /**
      * Validates the strength of the password
@@ -365,27 +264,11 @@ public class UserService {
     }
 
     /**
-     * Log the user out and remove the associated refresh token.
->>>>>>> 982c1c6 (Initial commit)
+     * Logs the user out and removes the associated refresh token.
      */
     public void logoutUser(@CurrentUser CustomUserDetails currentUser, LogOutRequest logOutRequest) {
         String deviceId = logOutRequest.getDeviceInfo().getDeviceId();
         UserDevice userDevice = userDeviceService.findDeviceByUserId(currentUser.getId(), deviceId)
-<<<<<<< HEAD
-                .filter(device -> device.getDeviceId().equals(deviceId))
-                .orElseThrow(() -> new UserLogoutException(logOutRequest.getDeviceInfo().getDeviceId(), "Invalid device Id supplied. No matching device found for the given user "));
-
-//        logger.isnfo("Removing refresh token associated with device [" + userDevice + "]");
-        refreshTokenService.deleteById(userDevice.getRefreshToken().getId());
-    }
-
-	public void setAdminAccess(String email) {
-		User currentUser = findByEmail(email)
-				.orElseThrow(() -> new SetAdminAccessException(email, "Not matching user found"));
-		Set<Role> newUserRoles = new HashSet<Role>(roleService.findAllWithoutSuperAdmin());
-		
-	}
-=======
             .filter(device -> device.getDeviceId().equals(deviceId))
             .orElseThrow(() -> new UserLogoutException(logOutRequest.getDeviceInfo().getDeviceId(), 
                 "Invalid device Id supplied. No matching device found for the given user"));
@@ -404,8 +287,6 @@ public class UserService {
         currentUser.setRoles(newUserRoles);
         userRepository.save(currentUser);
     }
-    
-    
 
     public String uploadProfilePicture(MultipartFile file, int width, int height) {
         // Define the maximum allowed file size (e.g., 5MB)
@@ -465,7 +346,6 @@ public class UserService {
         }
     }
 
-
     // Helper method to extract the file extension
     private String getFileExtension(String fileName) {
         if (fileName != null && fileName.contains(".")) {
@@ -475,21 +355,11 @@ public class UserService {
         }
     }
 
-    
-    
-    
     /**
-     * Check if the given email belongs to the same user (by comparing userId).
+     * Checks if the given email belongs to the same user (by comparing userId).
      */
     public boolean isSameUser(Long userId, String email) {
         Optional<User> userWithEmail = userRepository.findByEmail(email);
-        if (userWithEmail.isPresent()) {
-            return userWithEmail.get().getId().equals(userId);
-        }
-        return false;
+        return userWithEmail.map(user -> user.getId().equals(userId)).orElse(false);
     }
-
-
-
->>>>>>> 982c1c6 (Initial commit)
 }

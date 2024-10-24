@@ -14,15 +14,10 @@
 package com.ecoprint.printmanagement.model.payload;
 
 import com.ecoprint.printmanagement.validation.annotation.NullOrNotBlank;
-<<<<<<< HEAD
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-=======
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
->>>>>>> 982c1c6 (Initial commit)
 
 @Schema(name = "Registration Request", description = "The registration request payload")
 public class RegistrationRequest {
@@ -44,10 +39,6 @@ public class RegistrationRequest {
             type = "boolean", allowableValues = "true, false")
     private Boolean registerAsAdmin;
 
-<<<<<<< HEAD
-    public RegistrationRequest(String username, String email,
-                               String password, Boolean registerAsAdmin) {
-=======
     // New fields
     @NullOrNotBlank(message = "Phone number can be null but not blank")
     @Schema(name = "Phone number", allowableValues = "NonEmpty String")
@@ -72,29 +63,22 @@ public class RegistrationRequest {
     // Constructors
     public RegistrationRequest(String username, String email, String password, Boolean registerAsAdmin,
                                String phone, String address, String gender, String country, LocalDate dob, String profilePicture) {
->>>>>>> 982c1c6 (Initial commit)
         this.username = username;
         this.email = email;
         this.password = password;
         this.registerAsAdmin = registerAsAdmin;
-<<<<<<< HEAD
-=======
         this.phone = phone;
         this.address = address;
         this.gender = gender;
         this.country = country;
         this.dob = dob;
         this.profilePicture = profilePicture;
->>>>>>> 982c1c6 (Initial commit)
     }
 
     public RegistrationRequest() {
     }
 
-<<<<<<< HEAD
-=======
     // Getters and Setters
->>>>>>> 982c1c6 (Initial commit)
     public String getUsername() {
         return username;
     }
@@ -126,8 +110,6 @@ public class RegistrationRequest {
     public void setRegisterAsAdmin(Boolean registerAsAdmin) {
         this.registerAsAdmin = registerAsAdmin;
     }
-<<<<<<< HEAD
-=======
 
     public String getPhone() {
         return phone;
@@ -176,7 +158,4 @@ public class RegistrationRequest {
     public void setProfilePicture(String profilePicture) {
         this.profilePicture = profilePicture;
     }
-
-	
->>>>>>> 982c1c6 (Initial commit)
 }

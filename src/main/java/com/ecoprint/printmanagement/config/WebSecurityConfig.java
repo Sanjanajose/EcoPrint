@@ -19,10 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
-<<<<<<< HEAD
-=======
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
->>>>>>> 982c1c6 (Initial commit)
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
@@ -43,87 +40,56 @@ import com.ecoprint.printmanagement.service.CustomUserDetailsService;
 @EnableMethodSecurity(prePostEnabled = true)
 public class WebSecurityConfig {
 
-	private final CustomUserDetailsService userDetailsService;
+    private final CustomUserDetailsService userDetailsService;
+    private final JwtAuthenticationEntryPoint jwtEntryPoint;
 
-	private final JwtAuthenticationEntryPoint jwtEntryPoint;
+    @Autowired
+    public WebSecurityConfig(CustomUserDetailsService userDetailsService, JwtAuthenticationEntryPoint jwtEntryPoint) {
+        this.userDetailsService = userDetailsService;
+        this.jwtEntryPoint = jwtEntryPoint;
+    }
 
-	@Autowired
-	public WebSecurityConfig(CustomUserDetailsService userDetailsService, JwtAuthenticationEntryPoint jwtEntryPoint) {
-		this.userDetailsService = userDetailsService;
-		this.jwtEntryPoint = jwtEntryPoint;
-	}
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(authorizeRequests -> authorizeRequests
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-resources/**").permitAll()
+                        .requestMatchers("/swagger-resources").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/h2-console/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .exceptionHandling(exceptionHandling -> exceptionHandling.authenticationEntryPoint(jwtEntryPoint))
+                .sessionManagement(sessionManagement -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
 
-	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
-<<<<<<< HEAD
-		http.csrf().disable()
-				.authorizeHttpRequests(authorizeRequests -> authorizeRequests.requestMatchers("/swagger-ui/**")
-						.permitAll().requestMatchers("/v3/api-docs/**").permitAll()
-						.requestMatchers("/swagger-resources/**").permitAll().requestMatchers("/swagger-resources")
-						.permitAll().requestMatchers("/api/auth/**").permitAll().anyRequest().authenticated())
-				.exceptionHandling(exceptionHandling -> exceptionHandling.authenticationEntryPoint(jwtEntryPoint))
-				.sessionManagement(
-						sessionManagement -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        return http.build();
+    }
 
-		http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+    @Bean
+    public AuthenticationManager authManager(HttpSecurity http) throws Exception {
+        AuthenticationManagerBuilder authenticationManagerBuilder = http
+                .getSharedObject(AuthenticationManagerBuilder.class);
+        authenticationManagerBuilder.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
+        return authenticationManagerBuilder.build();
+    }
 
-		return http.build();
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter();
+    }
 
-	};
-=======
-	    http.csrf(csrf -> csrf.disable())
-	            .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-	                .requestMatchers("/swagger-ui/**").permitAll()
-	                .requestMatchers("/v3/api-docs/**").permitAll()
-	                .requestMatchers("/swagger-resources/**").permitAll()
-	                .requestMatchers("/swagger-resources").permitAll()
-	                .requestMatchers("/api/auth/**").permitAll()
-	                .requestMatchers("/h2-console/**").permitAll()
-	                .anyRequest().authenticated()
-	            )
-	            .exceptionHandling(exceptionHandling -> exceptionHandling.authenticationEntryPoint(jwtEntryPoint))
-	            .sessionManagement(sessionManagement -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-	            .headers(header -> header.frameOptions(frame -> frame.sameOrigin()));
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
-	    http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
-
-	    return http.build();
-	}
-
->>>>>>> 982c1c6 (Initial commit)
-
-	@Bean
-	public AuthenticationManager authManager(HttpSecurity http) throws Exception {
-		AuthenticationManagerBuilder authenticationManagerBuilder = http
-				.getSharedObject(AuthenticationManagerBuilder.class);
-		authenticationManagerBuilder.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
-		return authenticationManagerBuilder.build();
-	}
-<<<<<<< HEAD
-=======
-	
-	//@Bean
-	//public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-	  //  return authenticationConfiguration.getAuthenticationManager();
-	//}
-
-	
-	
->>>>>>> 982c1c6 (Initial commit)
-
-	@Bean
-	public JwtAuthenticationFilter jwtAuthenticationFilter() {
-		return new JwtAuthenticationFilter();
-	}
-
-	@Bean
-	public PasswordEncoder passwordEncoder() {
-		return new BCryptPasswordEncoder();
-	}
-
-	public void configure(WebSecurity web) {
-		web.ignoring().requestMatchers("/v3/api-docs", "/configuration/ui/", "/swagger-resources/**",
-				"/configuration/**", "/swagger-ui/**", "/webjars/**");
-	}
+    public void configure(WebSecurity web) {
+        web.ignoring().requestMatchers("/v3/api-docs", "/configuration/ui/", "/swagger-resources/**",
+                "/configuration/**", "/swagger-ui/**", "/webjars/**");
+    }
 }

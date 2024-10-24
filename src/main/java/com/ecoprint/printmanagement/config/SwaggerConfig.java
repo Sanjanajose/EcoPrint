@@ -21,12 +21,9 @@ import io.swagger.v3.oas.models.ExternalDocumentation;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
-<<<<<<< HEAD
-=======
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.security.SecurityScheme.Type;
->>>>>>> 982c1c6 (Initial commit)
 
 @Configuration
 public class SwaggerConfig {
@@ -42,15 +39,15 @@ public class SwaggerConfig {
     @Bean
     public OpenAPI metaInfo() {
         return new OpenAPI()
-                .info(new Info().title("Backend API For the Auth/User Service")
+                .info(new Info()
+                        .title("Backend API For the Auth/User Service")
                         .description("Backend API For the Auth/User Service")
                         .version("v0.0.1")
-                        .license(new License().name("Apache 2.0").url("http://springdoc.org")))
+                        .license(new License()
+                                .name("Apache 2.0")
+                                .url("http://springdoc.org")))
                 .externalDocs(new ExternalDocumentation()
                         .description("Backend API Wiki Documentation")
-<<<<<<< HEAD
-                        .url("https://Backend API.wiki.github.org/docs"));
-=======
                         .url("https://Backend API.wiki.github.org/docs"))
                 .addSecurityItem(new SecurityRequirement().addList("Bearer Token"))
                 .components(new io.swagger.v3.oas.models.Components()
@@ -59,7 +56,5 @@ public class SwaggerConfig {
                                 .scheme("bearer")
                                 .bearerFormat("JWT")
                                 .description("JWT Authorization header using the Bearer scheme. Example: \"Bearer your_token\"")));
->>>>>>> 982c1c6 (Initial commit)
     }
-
 }

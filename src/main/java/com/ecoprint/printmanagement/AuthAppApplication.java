@@ -15,19 +15,12 @@ package com.ecoprint.printmanagement;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.context.annotation.Bean;
-import org.springframework.data.jpa.convert.threeten.Jsr310JpaConverters;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.context.annotation.Bean;
 
-
-<<<<<<< HEAD
-@SpringBootApplication
-=======
 @SpringBootApplication(scanBasePackages = "com.ecoprint.printmanagement") // Scans this package and sub-packages
->>>>>>> 982c1c6 (Initial commit)
 @EnableAsync
 @EnableJpaRepositories(basePackages = "com.ecoprint.printmanagement.repository")
 public class AuthAppApplication {
@@ -35,10 +28,6 @@ public class AuthAppApplication {
     public static void main(String[] args) {
         SpringApplication.run(AuthAppApplication.class, args);
     }
-    
-    @Bean
-    public BCryptPasswordEncoder encoder() {
-    	return new BCryptPasswordEncoder();
-    }
 
+   
 }

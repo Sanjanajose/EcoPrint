@@ -15,7 +15,6 @@ package com.ecoprint.printmanagement.security;
 
 import java.util.Date;
 
-import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -32,14 +31,10 @@ import io.jsonwebtoken.UnsupportedJwtException;
 
 @Component
 public class JwtTokenValidator {
-<<<<<<< HEAD
-=======
-	
-	@Autowired
-	JwtTokenProvider jwtTokenProvider;
->>>>>>> 982c1c6 (Initial commit)
 
-//    private static final Logger logger = Logger.getLogger(JwtTokenValidator.class);
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
     private final String jwtSecret;
     private final LoggedOutJwtTokenCache loggedOutTokenCache;
 
@@ -58,30 +53,16 @@ public class JwtTokenValidator {
      */
     public boolean validateToken(String authToken) {
         try {
-<<<<<<< HEAD
-            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(authToken);
-=======
             Jwts.parserBuilder().setSigningKey(jwtTokenProvider.getSignInKey()).build().parseClaimsJws(authToken);
->>>>>>> 982c1c6 (Initial commit)
-
         } catch (SignatureException ex) {
-//            logger.error("Invalid JWT signature");
             throw new InvalidTokenRequestException("JWT", authToken, "Incorrect signature");
-
         } catch (MalformedJwtException ex) {
-//            logger.error("Invalid JWT token");
-            throw new InvalidTokenRequestException("JWT", authToken, "Malformed jwt token");
-
+            throw new InvalidTokenRequestException("JWT", authToken, "Malformed JWT token");
         } catch (ExpiredJwtException ex) {
-//            logger.error("Expired JWT token");
             throw new InvalidTokenRequestException("JWT", authToken, "Token expired. Refresh required");
-
         } catch (UnsupportedJwtException ex) {
-//            logger.error("Unsupported JWT token");
             throw new InvalidTokenRequestException("JWT", authToken, "Unsupported JWT token");
-
         } catch (IllegalArgumentException ex) {
-//            logger.error("JWT claims string is empty.");
             throw new InvalidTokenRequestException("JWT", authToken, "Illegal argument token");
         }
         validateTokenIsNotForALoggedOutDevice(authToken);
