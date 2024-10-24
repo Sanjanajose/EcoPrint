@@ -13,11 +13,9 @@
  */
 package com.ecoprint.printmanagement.repository;
 
-<<<<<<< HEAD
-=======
+
 import java.time.LocalDate;
 import java.util.List;
->>>>>>> 982c1c6 (Initial commit)
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,8 +31,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
     Boolean existsByUsername(String username);
-<<<<<<< HEAD
-=======
+
 
     // Find user by phone number
     Optional<User> findByPhone(String phone);
@@ -54,5 +51,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Find users by profile picture URL
     List<User> findByProfilePicture(String profilePicture);
 
->>>>>>> 982c1c6 (Initial commit)
+
 }

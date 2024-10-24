@@ -33,31 +33,28 @@ import com.ecoprint.printmanagement.model.payload.UserUpdateRequest;
 import com.ecoprint.printmanagement.service.AdminService;
 import com.ecoprint.printmanagement.service.UserService;
 
-import io.jsonwebtoken.io.IOException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.validation.Valid;
+import jakarta.mail.MessagingException;
+import io.jsonwebtoken.io.IOException;
 
 @RestController
 @RequestMapping("/admin")
 @PreAuthorize("hasRole('ADMIN') or hasRole('SUPERADMIN')")
 public class AdminController {
+
     private final AdminService adminService;
-    
-    @Autowired
-    private UserService userService; // Ensure this line is present
-
-    
-    @Autowired
-    private ApplicationEventPublisher applicationEventPublisher; // Add this line
-
+    private final UserService userService; // Ensure this line is present
+    private final ApplicationEventPublisher applicationEventPublisher; // Add this line
 
     @Autowired
-    public AdminController(AdminService adminService) {
+    public AdminController(AdminService adminService, UserService userService, ApplicationEventPublisher applicationEventPublisher) {
         this.adminService = adminService;
+        this.userService = userService;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
-    
-    
+
     @GetMapping("/users")
     public ResponseEntity<?> getAllUsers(
             @RequestParam(defaultValue = "0") int pageNumber,
@@ -65,20 +62,18 @@ public class AdminController {
         Page<User> users = adminService.getAllUsers(pageNumber, pageSize);
         return ResponseEntity.ok(users);
     }
-    
+
     @PostMapping("/users")
     @Operation(summary = "Create a new user with assigned roles")
     public ResponseEntity<?> createUser(
-            @Valid @RequestBody RegistrationRequest registrationRequest,
+            @Valid RegistrationRequest registrationRequest,
             @RequestParam Set<String> roles) { // Accept roles as a request parameter
 
         // Call admin service to create the user with the provided roles
         User newUser = adminService.createUser(registrationRequest, roles);
-        
         return ResponseEntity.ok(new ApiResponse(true, "User created successfully."));
     }
-    
-    
+
     @PutMapping("/users/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPERADMIN')")
     @Operation(summary = "Allows an admin or superadmin to update the user's details and roles")
@@ -126,7 +121,7 @@ public class AdminController {
         updatedUserData.setDob(updateRequest.getDob());
         updatedUserData.setProfilePicture(updateRequest.getProfilePicture());
 
-     // Convert the role strings to RoleName enum and validate
+        // Convert the role strings to RoleName enum and validate
         Set<RoleName> roleNames = updateRequest.getRoles().stream()
                 .map(roleName -> {
                     try {
@@ -152,8 +147,6 @@ public class AdminController {
         return ResponseEntity.ok(new ApiResponse(true, "User updated successfully."));
     }
 
-
-    
     @PutMapping("/users/{id}/roles")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPERADMIN')")
     @Operation(summary = "Assign roles to a user")
@@ -163,14 +156,13 @@ public class AdminController {
         return ResponseEntity.ok(new ApiResponse(true, "Roles assigned successfully."));
     }
 
-    
     @DeleteMapping("/users/{id}")
     @Operation(summary = "Delete a user")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         adminService.deleteUser(id);
         return ResponseEntity.ok(new ApiResponse(true, "User deleted successfully."));
     }
-    
+
     @GetMapping("/activity-logs")
     @Operation(summary = "Retrieve system activity logs")
     public ResponseEntity<?> getActivityLogs(@RequestParam(defaultValue = "0") int page, 

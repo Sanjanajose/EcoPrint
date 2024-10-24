@@ -13,10 +13,7 @@
  */
 package com.ecoprint.printmanagement.model;
 
-<<<<<<< HEAD
-=======
 import java.time.LocalDate;
->>>>>>> 982c1c6 (Initial commit)
 import java.util.HashSet;
 import java.util.Set;
 
@@ -40,13 +37,11 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-<<<<<<< HEAD
-@Table (name="users")
-@Entity(name = "USER")
-=======
+/**
+ * The type User. Represents a user in the system with roles and related information.
+ */
 @Entity(name = "USER")
 @Table(name = "users")
->>>>>>> 982c1c6 (Initial commit)
 public class User extends DateAudit {
 
     @Id
@@ -61,7 +56,7 @@ public class User extends DateAudit {
     private String email;
 
     @Column(name = "USERNAME", unique = true)
-    @NullOrNotBlank(message = "Username can not be blank")
+    @NullOrNotBlank(message = "Username cannot be blank")
     private String username;
 
     @Column(name = "PASSWORD")
@@ -69,15 +64,13 @@ public class User extends DateAudit {
     private String password;
 
     @Column(name = "FIRST_NAME")
-    @NullOrNotBlank(message = "First name can not be blank")
+    @NullOrNotBlank(message = "First name cannot be blank")
     private String firstName;
 
     @Column(name = "LAST_NAME")
-    @NullOrNotBlank(message = "Last name can not be blank")
+    @NullOrNotBlank(message = "Last name cannot be blank")
     private String lastName;
-<<<<<<< HEAD
-=======
-    
+
     @Column(name = "PHONE")
     private String phone; // New field
 
@@ -95,7 +88,6 @@ public class User extends DateAudit {
 
     @Column(name = "PROFILE_PICTURE")
     private String profilePicture; // URL or path to the profile picture
->>>>>>> 982c1c6 (Initial commit)
 
     @Column(name = "IS_ACTIVE", nullable = false)
     private Boolean active;
@@ -120,23 +112,18 @@ public class User extends DateAudit {
         firstName = user.getFirstName();
         lastName = user.getLastName();
         email = user.getEmail();
-<<<<<<< HEAD
-=======
         phone = user.getPhone(); // Copy new field
         address = user.getAddress(); // Copy new field
         gender = user.getGender(); // Copy new field
         country = user.getCountry(); // Copy new field
         dob = user.getDob(); // Copy new field
         profilePicture = user.getProfilePicture(); // Copy new field
->>>>>>> 982c1c6 (Initial commit)
         active = user.getActive();
         roles = user.getRoles();
         isEmailVerified = user.getEmailVerified();
     }
-<<<<<<< HEAD
-=======
-    
-    
+
+    // Getters and Setters for new fields
     public String getPhone() {
         return phone;
     }
@@ -184,7 +171,6 @@ public class User extends DateAudit {
     public void setProfilePicture(String profilePicture) {
         this.profilePicture = profilePicture;
     }
->>>>>>> 982c1c6 (Initial commit)
 
     public void addRole(Role role) {
         roles.add(role);
@@ -278,17 +264,22 @@ public class User extends DateAudit {
 
     @Override
     public String toString() {
-        return "User{" + "id=" + id + ", email='" + email + '\'' + ", username='" + username + '\'' + ", password='"
-<<<<<<< HEAD
-                + password + '\'' + ", firstName='" + firstName + '\'' + ", lastName='" + lastName + '\'' + ", active="
-                + active + ", roles=" + roles + ", isEmailVerified=" + isEmailVerified + '}';
+        return "User{" +
+                "id=" + id +
+                ", email='" + email + '\'' +
+                ", username='" + username + '\'' +
+                ", password='" + password + '\'' +
+                ", firstName='" + firstName + '\'' +
+                ", lastName='" + lastName + '\'' +
+                ", phone='" + phone + '\'' +
+                ", address='" + address + '\'' +
+                ", gender='" + gender + '\'' +
+                ", country='" + country + '\'' +
+                ", dob=" + dob +
+                ", profilePicture='" + profilePicture + '\'' +
+                ", active=" + active +
+                ", roles=" + roles +
+                ", isEmailVerified=" + isEmailVerified +
+                '}';
     }
-=======
-                + password + '\'' + ", firstName='" + firstName + '\'' + ", lastName='" + lastName + '\'' + 
-                ", phone='" + phone + '\'' + ", address='" + address + '\'' + ", gender='" + gender + '\'' + 
-                ", country='" + country + '\'' + ", dob=" + dob + ", profilePicture='" + profilePicture + '\'' + 
-                ", active=" + active + ", roles=" + roles + ", isEmailVerified=" + isEmailVerified + '}';
-    }
-
->>>>>>> 982c1c6 (Initial commit)
 }

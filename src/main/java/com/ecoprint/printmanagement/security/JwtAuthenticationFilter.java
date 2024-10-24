@@ -61,16 +61,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
-<<<<<<< HEAD
-=======
-            // Bypass JWT validation for authentication endpoints like /api/auth/ (e.g., register, login)
-            if (request.getServletPath().startsWith("/api/auth/register")) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-
-            // Proceed with JWT validation for all other endpoints
->>>>>>> 982c1c6 (Initial commit)
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt) && jwtTokenValidator.validateToken(jwt)) {
@@ -82,7 +72,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (Exception ex) {
-<<<<<<< HEAD
 //            log.error("Failed to set user authentication in security context: ", ex);
             throw ex;
         }
@@ -90,19 +79,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-=======
-            // Log or handle the exception
-            throw ex;
-        }
-
-        // Continue the filter chain
-        filterChain.doFilter(request, response);
-    }
-
-    
-    
-
->>>>>>> 982c1c6 (Initial commit)
     /**
      * Extract the token from the Authorization request header
      */

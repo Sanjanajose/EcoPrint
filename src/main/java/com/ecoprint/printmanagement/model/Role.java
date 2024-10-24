@@ -32,13 +32,9 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 
 /**
- * The type Role. Defines the role and the list of users who are associated with that role
+ * The type Role. Defines the role and the list of users who are associated with that role.
  */
-<<<<<<< HEAD
-@Entity (name = "ROLE")
-=======
 @Entity
->>>>>>> 982c1c6 (Initial commit)
 @Table(name = "roles")
 public class Role {
 
@@ -52,24 +48,24 @@ public class Role {
     @NaturalId
     private RoleName role;
 
-<<<<<<< HEAD
     @ManyToMany(mappedBy = "roles", fetch = FetchType.LAZY)
-=======
-    @ManyToMany(mappedBy = "roles", fetch = FetchType.EAGER)
->>>>>>> 982c1c6 (Initial commit)
     @JsonIgnore
     private Set<User> userList = new HashSet<>();
 
+    // Constructor to initialize Role with a RoleName
     public Role(RoleName role) {
         this.role = role;
     }
 
+    // Default constructor
     public Role() {
-
     }
 
+    /**
+     * Checks if the role is an admin role.
+     */
     public boolean isAdminRole() {
-        return null != this && this.role.equals(RoleName.ROLE_ADMIN);
+        return this.role != null && this.role.equals(RoleName.ROLE_ADMIN);
     }
 
     public Long getId() {

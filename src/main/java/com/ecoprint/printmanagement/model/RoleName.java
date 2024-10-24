@@ -14,26 +14,22 @@
 package com.ecoprint.printmanagement.model;
 
 /**
- * The enum Role role.
+ * The enum RoleName defines the roles in the application.
  */
 public enum RoleName {
 
     /**
-     * Role admin authority role.
+     * Role for admin authority.
      */
     ROLE_ADMIN,
 
     /**
-     * Role user authority role.
+     * Role for user authority.
      */
     ROLE_USER,
-    
-<<<<<<< HEAD
+
     /**
-     * Role SUPERADMIN authority role.
+     * Role for super admin authority.
      */
-    ROLE_SUPERADMIN;
-=======
     ROLE_SUPERADMIN
->>>>>>> 982c1c6 (Initial commit)
 }

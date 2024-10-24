@@ -28,11 +28,7 @@ public class DeviceInfo {
 
     @NotNull(message = "Device type cannot be null")
     @Schema(name = "Device type Android/iOS", required = true, type = "string", allowableValues =
-<<<<<<< HEAD
-            "DEVICE_TYPE_ANDROID, DEVICE_TYPE_IOS")
-=======
             "DEVICE_TYPE_ANDROID, DEVICE_TYPE_IOS, DEVICE_TYPE_WEB")
->>>>>>> 982c1c6 (Initial commit)
     private DeviceType deviceType;
 
     @NullOrNotBlank(message = "Device notification token can be null but not blank")

@@ -15,24 +15,16 @@ package com.ecoprint.printmanagement.service;
 
 import java.util.Collection;
 import java.util.List;
-<<<<<<< HEAD
-=======
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
->>>>>>> 982c1c6 (Initial commit)
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-<<<<<<< HEAD
-import com.ecoprint.printmanagement.model.Role;
-=======
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
-import com.ecoprint.printmanagement.model.User;
->>>>>>> 982c1c6 (Initial commit)
 import com.ecoprint.printmanagement.repository.RoleRepository;
 
 @Service
@@ -45,45 +37,47 @@ public class RoleService {
         this.roleRepository = roleRepository;
     }
 
-<<<<<<< HEAD
     /**
-     * Find all roles from the database
+     * Find all roles from the database.
      */
-=======
-    // Find all roles from the database
->>>>>>> 982c1c6 (Initial commit)
     public Collection<Role> findAll() {
         return roleRepository.findAll();
     }
 
-<<<<<<< HEAD
-	public List<Role> findAllWithoutSuperAdmin() {
-		return roleRepository.findAllWithoutSuperAdmin();
-	}
-=======
-    // Find all roles without super admin
+    /**
+     * Find all roles without super admin.
+     */
     public List<Role> findAllWithoutSuperAdmin() {
         return roleRepository.findAllWithoutSuperAdmin();
     }
 
-    // Find a role by its name (as an enum)
+    /**
+     * Find a role by its name (as an enum).
+     */
     public Optional<Role> findByRole(RoleName roleName) {
         return roleRepository.findByRole(roleName);
     }
 
-    // Get a role by name, throwing exception if not found
+    /**
+     * Get a role by name, throwing exception if not found.
+     */
     public Role getRoleByName(RoleName roleName) {
         return findByRole(roleName) // Use findByRole for safer handling
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
     }
 
-    // Method to get roles by a set of names
+    /**
+     * Method to get roles by a set of names.
+     */
     public Set<Role> getRolesByName(Set<RoleName> roleNames) {
         return roleNames.stream()
                 .map(this::getRoleByName) // Use getRoleByName for retrieval
                 .collect(Collectors.toSet());
     }
-    
+
+    /**
+     * Find a role by name as a string.
+     */
     public Optional<Role> findByName(String roleName) {
         RoleName roleEnum;
         try {
@@ -91,12 +85,6 @@ public class RoleService {
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
         }
-        return roleRepository.findByRole(roleEnum); // Make sure this matches
+        return roleRepository.findByRole(roleEnum); // Ensure this matches
     }
-
-
-
-    
->>>>>>> 982c1c6 (Initial commit)
-
 }
