@@ -44,24 +44,31 @@ import io.jsonwebtoken.security.Keys;
 
 @Component
 public class JwtTokenProvider {
-	
-	@Autowired
-	JwtKeyRepository jwtKeyRepository;
+
+    @Autowired
+    JwtKeyRepository jwtKeyRepository;
 
     private static final String AUTHORITIES_CLAIM = "authorities";
-    private final long jwtExpirationInMs;
 
-    public JwtTokenProvider(@Value("${app.jwt.secret}") String jwtSecret, @Value("${app.jwt.expiration}") long jwtExpirationInMs) {
-        this.jwtExpirationInMs = jwtExpirationInMs;
+    @Value("${jwt.defaultExpirationMs}")
+    private long jwtExpirationInMs;
+
+    @Value("${jwt.rememberMeExpirationMs}")
+    private long rememberMeExpirationInMs;
+
+    public JwtTokenProvider(@Value("${app.jwt.secret}") String jwtSecret) {
+        // Constructor kept for potential future use or adjustments.
     }
 
     /**
-     * Generates a token from a principal object. Embed the refresh token in the jwt
-     * so that a new jwt can be created
+     * Generates a token from a principal object with a custom expiration time.
      */
-    public String generateToken(CustomUserDetails customUserDetails) {
-        Instant expiryDate = Instant.now().plusMillis(jwtExpirationInMs);
+    public String generateToken(CustomUserDetails customUserDetails, boolean rememberMe) {
+        // Use a longer expiration time if "remember me" is enabled
+        long expirationTime = rememberMe ? getExtendedExpiryDuration() : jwtExpirationInMs;
+        Instant expiryDate = Instant.now().plusMillis(expirationTime);
         String authorities = getUserAuthorities(customUserDetails);
+
         return Jwts.builder()
                 .setSubject(Long.toString(customUserDetails.getId()))
                 .setIssuedAt(Date.from(Instant.now()))
@@ -70,40 +77,53 @@ public class JwtTokenProvider {
                 .claim(AUTHORITIES_CLAIM, authorities)
                 .compact();
     }
+
+    public long getExtendedExpiryDuration() {
+        return rememberMeExpirationInMs;
+    }
     
+    
+
+
     public Key getSignInKey() {
-    	byte[] keyBytes;
-    	try {
-			keyBytes = Decoders.BASE64.decode(getLatestKey());
-		} catch (DecodingException | NoSuchAlgorithmException e) {
-			e.printStackTrace(); // Consider using a logger instead of printStackTrace for production code
-			return null; // Handle error properly in production
-		}
-    	return Keys.hmacShaKeyFor(keyBytes);   
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(getLatestKey());
+        } catch (DecodingException | NoSuchAlgorithmException e) {
+            e.printStackTrace(); // Consider using a logger instead of printStackTrace for production code
+            return null; // Handle error properly in production
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
     }
-    
+
     public String generateAndSaveKey() throws NoSuchAlgorithmException {
-    	KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA256");
-    	keyGen.init(256);
-    	SecretKey secretKey = keyGen.generateKey();
-    	String encodedKey = Base64.getEncoder().encodeToString(secretKey.getEncoded());
-    	
-    	JwtKey jwtKey = new JwtKey();
-    	jwtKey.setSecretKey(encodedKey);
-    	jwtKey.setCreatedAt(LocalDateTime.now());
-    	jwtKeyRepository.save(jwtKey);
-    	
-    	return encodedKey;
+        KeyGenerator keyGen = KeyGenerator.getInstance("HmacSHA256");
+        keyGen.init(256);
+        SecretKey secretKey = keyGen.generateKey();
+        String encodedKey = Base64.getEncoder().encodeToString(secretKey.getEncoded());
+
+        JwtKey jwtKey = new JwtKey();
+        jwtKey.setSecretKey(encodedKey);
+        jwtKey.setCreatedAt(LocalDateTime.now());
+        jwtKeyRepository.save(jwtKey);
+
+        return encodedKey;
     }
-    
+
     public String getLatestKey() throws NoSuchAlgorithmException {
-    	JwtKey jwtKey = jwtKeyRepository.findTopByOrderByCreatedAtDesc();
-    	return jwtKey != null ? jwtKey.getSecretKey() : generateAndSaveKey();
+        JwtKey jwtKey = jwtKeyRepository.findTopByOrderByCreatedAtDesc();
+        return jwtKey != null ? jwtKey.getSecretKey() : generateAndSaveKey();
     }
 
     /**
-     * Generates a token from a principal object. Embed the refresh token in the jwt
-     * so that a new jwt can be created
+     * Generates a token from a principal object.
+     */
+    public String generateToken(CustomUserDetails customUserDetails) {
+        return generateToken(customUserDetails, false);
+    }
+
+    /**
+     * Generates a token from a principal object by userId.
      */
     public String generateTokenFromUserId(Long userId) {
         Instant expiryDate = Instant.now().plusMillis(jwtExpirationInMs);
@@ -116,7 +136,7 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Returns the user id encapsulated within the token
+     * Returns the user id encapsulated within the token.
      */
     public Long getUserIdFromJWT(String token) {
         Claims claims = Jwts.parserBuilder()
@@ -129,7 +149,7 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Returns the token expiration date encapsulated within the token
+     * Returns the token expiration date encapsulated within the token.
      */
     public Date getTokenExpiryFromJWT(String token) {
         Claims claims = Jwts.parserBuilder()
@@ -142,15 +162,15 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Return the jwt expiration for the client so that they can execute
-     * the refresh token logic appropriately
+     * Return the JWT expiration for the client so that they can execute
+     * the refresh token logic appropriately.
      */
     public long getExpiryDuration() {
         return jwtExpirationInMs;
     }
 
     /**
-     * Return the jwt authorities claim encapsulated within the token
+     * Return the JWT authorities claim encapsulated within the token.
      */
     public List<GrantedAuthority> getAuthoritiesFromJWT(String token) {
         Claims claims = Jwts.parserBuilder()

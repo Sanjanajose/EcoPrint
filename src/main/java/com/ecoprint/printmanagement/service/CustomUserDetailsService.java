@@ -14,22 +14,22 @@
 package com.ecoprint.printmanagement.service;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.UserRepository;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
-//    private static final Logger logger = Logger.getLogger(CustomUserDetailsService.class);
     private final UserRepository userRepository;
 
     @Autowired
@@ -40,15 +40,45 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         Optional<User> dbUser = userRepository.findByEmail(email);
-//        logger.info("Fetched user : " + dbUser + " by " + email);
-        return dbUser.map(CustomUserDetails::new)
-                .orElseThrow(() -> new UsernameNotFoundException("Couldn't find a matching user email in the database for " + email));
+
+        User user = dbUser.orElseThrow(() -> 
+            new UsernameNotFoundException("Couldn't find a matching user email in the database for " + email));
+
+        // Convert roles and permissions to Spring Security's SimpleGrantedAuthority
+        Set<SimpleGrantedAuthority> authorities = user.getRoles().stream()
+            .map(role -> new SimpleGrantedAuthority(role.getRole().name()))
+            .collect(Collectors.toSet());
+
+        authorities.addAll(user.getPermissions().stream()
+            .map(permission -> new SimpleGrantedAuthority(permission.name()))
+            .collect(Collectors.toSet()));
+
+        // Return a new UserDetails object with the user's roles and permissions
+        return new org.springframework.security.core.userdetails.User(
+            user.getUsername(),
+            user.getPassword(),
+            authorities);
     }
 
     public UserDetails loadUserById(Long id) {
         Optional<User> dbUser = userRepository.findById(id);
-//        logger.info("Fetched user : " + dbUser + " by " + id);
-        return dbUser.map(CustomUserDetails::new)
-                .orElseThrow(() -> new UsernameNotFoundException("Couldn't find a matching user id in the database for " + id));
+
+        User user = dbUser.orElseThrow(() -> 
+            new UsernameNotFoundException("Couldn't find a matching user id in the database for " + id));
+
+        // Convert roles and permissions to Spring Security's SimpleGrantedAuthority
+        Set<SimpleGrantedAuthority> authorities = user.getRoles().stream()
+            .map(role -> new SimpleGrantedAuthority(role.getRole().name()))
+            .collect(Collectors.toSet());
+
+        authorities.addAll(user.getPermissions().stream()
+            .map(permission -> new SimpleGrantedAuthority(permission.name()))
+            .collect(Collectors.toSet()));
+
+        // Return a new UserDetails object with the user's roles and permissions
+        return new org.springframework.security.core.userdetails.User(
+            user.getUsername(),
+            user.getPassword(),
+            authorities);
     }
 }

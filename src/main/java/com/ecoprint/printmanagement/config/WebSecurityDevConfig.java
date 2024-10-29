@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,11 +30,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class WebSecurityDevConfig {
 
-//    private static final Logger logger = Logger.getLogger(WebSecurityDevConfig.class);
-
-	@Bean
-	protected void configure(HttpSecurity http) throws Exception {
-//        logger.info("Loaded inside a dev only");
-		http.authorizeHttpRequests(authorizeHttpRequests -> authorizeHttpRequests.anyRequest().permitAll());
-	}
+    @Bean
+    public SecurityFilterChain configure(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(authorizeHttpRequests -> 
+                authorizeHttpRequests.anyRequest().permitAll());
+        return http.build();
+    }
 }

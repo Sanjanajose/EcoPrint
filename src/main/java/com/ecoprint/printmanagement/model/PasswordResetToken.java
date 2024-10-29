@@ -12,6 +12,7 @@
  * limitations under the License.
  */
 package com.ecoprint.printmanagement.model;
+import com.ecoprint.printmanagement.model.audit.*;
 
 import java.time.Instant;
 

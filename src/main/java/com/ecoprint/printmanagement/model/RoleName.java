@@ -31,5 +31,17 @@ public enum RoleName {
     /**
      * Role for super admin authority.
      */
-    ROLE_SUPERADMIN
+    ROLE_SUPERADMIN,
+    
+    /**
+     * Role for super admin authority.
+     */
+    ROLE_TECHNICIAN,
+    
+    /**
+     * Role for super admin authority.
+     */
+    ROLE_GUESTUSER
+    
+    
 }

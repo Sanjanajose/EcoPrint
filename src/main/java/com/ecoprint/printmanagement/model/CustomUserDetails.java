@@ -41,27 +41,27 @@ public class CustomUserDetails extends User implements UserDetails {
 
     @Override
     public String getUsername() {
-        return super.getEmail();
+        return super.getEmail(); // Using email as the username for login purposes
     }
 
     @Override
     public boolean isAccountNonExpired() {
-        return true;
+        return true; // Update as per your requirement
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return super.getActive();
+        return super.getActive(); // Assuming that 'active' means the account is not locked
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return true;
+        return true; // Update as per your requirement
     }
 
     @Override
     public boolean isEnabled() {
-        return super.getEmailVerified();
+        return super.getEmailVerified(); // Assuming that a verified email means the user is enabled
     }
 
     @Override
@@ -71,7 +71,7 @@ public class CustomUserDetails extends User implements UserDetails {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj == this) {
+        if (this == obj) {
             return true;
         }
         if (obj == null || getClass() != obj.getClass()) {
@@ -79,5 +79,9 @@ public class CustomUserDetails extends User implements UserDetails {
         }
         CustomUserDetails that = (CustomUserDetails) obj;
         return Objects.equals(getId(), that.getId());
+    }
+
+    public User getUser() {
+        return this; // Returns the current User instance as this class extends User
     }
 }

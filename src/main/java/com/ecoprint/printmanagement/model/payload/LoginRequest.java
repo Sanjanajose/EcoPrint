@@ -38,6 +38,10 @@ public class LoginRequest {
     @NotNull(message = "Device info cannot be null")
     @Schema(name = "Device info", required = true, type = "object", allowableValues = "A valid " +
             "deviceInfo object")
+    
+    
+    private boolean rememberMe;
+
     private DeviceInfo deviceInfo;
 
     public LoginRequest(String username, String email, String password, DeviceInfo deviceInfo) {
@@ -80,5 +84,13 @@ public class LoginRequest {
 
     public void setDeviceInfo(DeviceInfo deviceInfo) {
         this.deviceInfo = deviceInfo;
+    }
+    
+    public boolean isRememberMe() {
+        return rememberMe;
+    }
+    
+    public void setRememberMe(boolean rememberMe) {
+        this.rememberMe = rememberMe;
     }
 }

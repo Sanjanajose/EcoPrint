@@ -23,8 +23,12 @@ import com.ecoprint.printmanagement.model.audit.DateAudit;
 import com.ecoprint.printmanagement.validation.annotation.NullOrNotBlank;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -72,25 +76,39 @@ public class User extends DateAudit {
     private String lastName;
 
     @Column(name = "PHONE")
-    private String phone; // New field
+    private String phone;
 
     @Column(name = "ADDRESS")
-    private String address; // New field
+    private String address;
 
     @Column(name = "GENDER")
-    private String gender; // New field
+    private String gender;
 
     @Column(name = "COUNTRY")
-    private String country; // New field
+    private String country;
 
-    @Column(name = "DOB") // Date of Birth
-    private LocalDate dob; // New field
+    @Column(name = "DOB")
+    private LocalDate dob;
 
     @Column(name = "PROFILE_PICTURE")
-    private String profilePicture; // URL or path to the profile picture
+    private String profilePicture;
 
     @Column(name = "IS_ACTIVE", nullable = false)
-    private Boolean active;
+    private Boolean active = true;
+    
+    @Column(name = "TWO_FACTOR_ENABLED", nullable = false)
+    private boolean twoFactorEnabled = false;
+    
+    @Column(name = "IS_ADMIN", nullable = false)
+    private Boolean isAdmin = false; // Default to false
+
+    
+    @ElementCollection
+    @CollectionTable(name = "user_backup_codes", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "backup_code")
+    private Set<String> backupCodes = new HashSet<>();
+
+
 
     @ManyToMany(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(name = "USER_AUTHORITY", joinColumns = {
@@ -98,8 +116,14 @@ public class User extends DateAudit {
             @JoinColumn(name = "ROLE_ID", referencedColumnName = "ROLE_ID")})
     private Set<Role> roles = new HashSet<>();
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @Enumerated(EnumType.STRING)
+    @CollectionTable(name = "user_permissions", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "permission")
+    private Set<Permission> permissions = new HashSet<>();
+
     @Column(name = "IS_EMAIL_VERIFIED", nullable = false)
-    private Boolean isEmailVerified;
+    private Boolean isEmailVerified = false;
 
     public User() {
         super();
@@ -112,18 +136,20 @@ public class User extends DateAudit {
         firstName = user.getFirstName();
         lastName = user.getLastName();
         email = user.getEmail();
-        phone = user.getPhone(); // Copy new field
-        address = user.getAddress(); // Copy new field
-        gender = user.getGender(); // Copy new field
-        country = user.getCountry(); // Copy new field
-        dob = user.getDob(); // Copy new field
-        profilePicture = user.getProfilePicture(); // Copy new field
+        phone = user.getPhone();
+        address = user.getAddress();
+        gender = user.getGender();
+        country = user.getCountry();
+        dob = user.getDob();
+        profilePicture = user.getProfilePicture();
         active = user.getActive();
-        roles = user.getRoles();
+        roles = new HashSet<>(user.getRoles());
+        permissions = new HashSet<>(user.getPermissions());
         isEmailVerified = user.getEmailVerified();
     }
 
     // Getters and Setters for new fields
+
     public String getPhone() {
         return phone;
     }
@@ -175,15 +201,17 @@ public class User extends DateAudit {
     public void addRole(Role role) {
         roles.add(role);
         role.getUserList().add(this);
-    }
-
-    public void addRoles(Set<Role> roles) {
-        roles.forEach(this::addRole);
+        permissions.addAll(role.getPermissions());
     }
 
     public void removeRole(Role role) {
         roles.remove(role);
         role.getUserList().remove(this);
+        permissions.removeAll(role.getPermissions());
+    }
+
+    public void addRoles(Set<Role> roles) {
+        roles.forEach(this::addRole);
     }
 
     public void markVerificationConfirmed() {
@@ -250,8 +278,16 @@ public class User extends DateAudit {
         return roles;
     }
 
-    public void setRoles(Set<Role> authorities) {
-        roles = authorities;
+    public void setRoles(Set<Role> roles) {
+        this.roles = roles;
+    }
+
+    public Set<Permission> getPermissions() {
+        return permissions;
+    }
+
+    public void setPermissions(Set<Permission> permissions) {
+        this.permissions = permissions;
     }
 
     public Boolean getEmailVerified() {
@@ -261,6 +297,25 @@ public class User extends DateAudit {
     public void setEmailVerified(Boolean emailVerified) {
         isEmailVerified = emailVerified;
     }
+    
+ // Getter for twoFactorEnabled
+    public boolean isTwoFactorEnabled() {
+        return twoFactorEnabled;
+    }
+
+    // Setter for twoFactorEnabled
+    public void setTwoFactorEnabled(boolean twoFactorEnabled) {
+        this.twoFactorEnabled = twoFactorEnabled;
+    }
+    
+    public Set<String> getBackupCodes() {
+        return backupCodes;
+    }
+
+    public void setBackupCodes(Set<String> backupCodes) {
+        this.backupCodes = backupCodes;
+    }
+    
 
     @Override
     public String toString() {
@@ -279,6 +334,7 @@ public class User extends DateAudit {
                 ", profilePicture='" + profilePicture + '\'' +
                 ", active=" + active +
                 ", roles=" + roles +
+                ", permissions=" + permissions +
                 ", isEmailVerified=" + isEmailVerified +
                 '}';
     }

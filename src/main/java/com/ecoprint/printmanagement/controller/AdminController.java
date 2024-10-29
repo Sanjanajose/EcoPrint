@@ -27,9 +27,9 @@ import com.ecoprint.printmanagement.model.ActivityLog;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
-import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.model.payload.RoleAssignmentRequest;
 import com.ecoprint.printmanagement.model.payload.UserUpdateRequest;
+import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.service.AdminService;
 import com.ecoprint.printmanagement.service.UserService;
 

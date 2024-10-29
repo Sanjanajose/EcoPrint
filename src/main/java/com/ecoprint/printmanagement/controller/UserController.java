@@ -13,14 +13,24 @@
  */
 package com.ecoprint.printmanagement.controller;
 
-import org.slf4j.Logger;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.repository.query.Param;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.annotation.CurrentUser;
@@ -39,10 +49,7 @@ import com.ecoprint.printmanagement.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-
 import jakarta.validation.Valid;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/user")
@@ -60,19 +67,13 @@ public class UserController {
         this.applicationEventPublisher = applicationEventPublisher;
     }
 
-    /**
-     * Gets the current user profile of the logged-in user
-     */
     @GetMapping("/me")
     @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Returns the current user profile")
     public ResponseEntity<?> getUserProfile(@CurrentUser CustomUserDetails currentUser) {
-        return ResponseEntity.ok("Hello. This is about me");
+        return ResponseEntity.ok(currentUser);
     }
 
-    /**
-     * Returns all admins in the system. Requires Admin access
-     */
     @GetMapping("/admins")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Returns the list of configured admins. Requires ADMIN Access")
@@ -80,9 +81,6 @@ public class UserController {
         return ResponseEntity.ok("Hello. This is about admins");
     }
 
-    /**
-     * Updates the password of the current logged-in user
-     */
     @PostMapping("/password/update")
     @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Allows the user to change their password once logged in by supplying the correct current password")
@@ -98,9 +96,6 @@ public class UserController {
                 .orElseThrow(() -> new UpdatePasswordException("--Empty--", "No such user present."));
     }
 
-    /**
-     * Log the user out from the app/device. Release the refresh token associated with the user device.
-     */
     @PostMapping("/logout")
     @Operation(summary = "Logs the specified user device and clears the refresh tokens associated with it")
     public ResponseEntity<?> logoutUser(@CurrentUser CustomUserDetails customUserDetails,
@@ -114,9 +109,6 @@ public class UserController {
         return ResponseEntity.ok(new ApiResponse(true, "Log out successful"));
     }
 
-    /**
-     * Resets a user's password with a temporary password. Only admins can perform this action.
-     */
     @GetMapping("/resetPassword")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Reset Password with a temporary password for the given user")
@@ -125,9 +117,6 @@ public class UserController {
         return ResponseEntity.ok(new ApiResponse(true, "Temporary password set successfully"));
     }
 
-    /**
-     * Set admin access for the specified user. Requires Super Admin privileges.
-     */
     @GetMapping("/setAdminAccess")
     @PreAuthorize("hasRole('SUPERADMIN')")
     @Operation(summary = "Grants admin access to a user. Requires SUPERADMIN access.")
@@ -136,9 +125,6 @@ public class UserController {
         return ResponseEntity.ok(new ApiResponse(true, "Admin Access Given Successfully"));
     }
 
-    /**
-     * Updates the logged-in user's own profile.
-     */
     @PutMapping("/me")
     @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Allows the logged-in user to update their own profile")
@@ -149,40 +135,33 @@ public class UserController {
 
         Long userId = currentUser.getId();
 
-        // Validate that the email isn't already in use by another user
         if (userService.existsByEmail(updateRequest.getEmail()) && !currentUser.getEmail().equals(updateRequest.getEmail())) {
             return ResponseEntity.badRequest().body(new ApiResponse(false, "Email is already in use."));
         }
 
-        // Validate and upload profile picture if provided
         if (profilePicture != null && !profilePicture.isEmpty()) {
-            // Validate file size (5MB limit)
             long maxFileSize = 5 * 1024 * 1024;
             if (profilePicture.getSize() > maxFileSize) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, "File size exceeds the maximum limit of 5MB."));
             }
 
-            // Validate file type (JPEG, PNG)
             Set<String> allowedContentTypes = Set.of("image/jpeg", "image/png");
             if (!allowedContentTypes.contains(profilePicture.getContentType())) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid file type. Only JPEG and PNG are allowed."));
             }
 
-            // Handle the upload logic
             try {
                 String profilePictureUrl = userService.uploadProfilePicture(profilePicture, 300, 300);
-                updateRequest.setProfilePicture(profilePictureUrl);  // Set the profile picture URL
+                updateRequest.setProfilePicture(profilePictureUrl);
             } catch (FileUploadException e) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, e.getMessage()));
             }
         }
 
-        // Prevent the user from updating their own roles
         Set<String> currentRoles = currentUser.getAuthorities().stream()
                 .map(role -> role.getAuthority())
                 .collect(Collectors.toSet());
 
-        // Update user details
         User updatedUserData = new User();
         updatedUserData.setUsername(updateRequest.getUsername());
         updatedUserData.setEmail(updateRequest.getEmail());
@@ -192,19 +171,24 @@ public class UserController {
         updatedUserData.setCountry(updateRequest.getCountry());
         updatedUserData.setDob(updateRequest.getDob());
 
-        // Set updated profile picture if available
         if (updateRequest.getProfilePicture() != null) {
             updatedUserData.setProfilePicture(updateRequest.getProfilePicture());
         }
 
-        // Update user in the service layer
         User updatedUser = userService.updateUser(userId, updatedUserData, currentRoles);
 
-        // Trigger user account change event
         OnUserAccountChangeEvent userUpdateEvent = new OnUserAccountChangeEvent(updatedUser, 
             "Update Profile", "User updated their own profile successfully");
         applicationEventPublisher.publishEvent(userUpdateEvent);
 
         return ResponseEntity.ok(new ApiResponse(true, "Profile updated successfully."));
+    }
+    
+    @DeleteMapping("/user/{userId}/role")
+    @PreAuthorize("hasAuthority('MANAGE_ROLES')")
+    public ResponseEntity<?> removeUserRole(@PathVariable Long userId, @RequestParam String roleName) {
+        userService.deleteUserRole(userId, roleName);
+        return ResponseEntity.ok(new ApiResponse(true, "Role removed successfully."));
+        
     }
 }

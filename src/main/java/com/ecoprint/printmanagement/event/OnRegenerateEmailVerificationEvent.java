@@ -14,10 +14,10 @@
 package com.ecoprint.printmanagement.event;
 
 import org.springframework.context.ApplicationEvent;
+import com.ecoprint.printmanagement.model.token.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.ecoprint.printmanagement.model.User;
-import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
 
 public class OnRegenerateEmailVerificationEvent extends ApplicationEvent {
 
