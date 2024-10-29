@@ -12,10 +12,11 @@
  * limitations under the License.
  */
 package com.ecoprint.printmanagement.controller;
+import org.springframework.security.core.Authentication;
+
 
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,7 @@ import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
 import com.ecoprint.printmanagement.model.payload.LogOutRequest;
+import com.ecoprint.printmanagement.model.payload.RoleAssignmentRequest;
 import com.ecoprint.printmanagement.model.payload.UpdatePasswordRequest;
 import com.ecoprint.printmanagement.model.payload.UserUpdateRequest;
 import com.ecoprint.printmanagement.service.AuthService;
@@ -183,12 +185,33 @@ public class UserController {
 
         return ResponseEntity.ok(new ApiResponse(true, "Profile updated successfully."));
     }
-    
-    @DeleteMapping("/user/{userId}/role")
-    @PreAuthorize("hasAuthority('MANAGE_ROLES')")
-    public ResponseEntity<?> removeUserRole(@PathVariable Long userId, @RequestParam String roleName) {
-        userService.deleteUserRole(userId, roleName);
-        return ResponseEntity.ok(new ApiResponse(true, "Role removed successfully."));
-        
+    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
+    @PostMapping("/{userId}/assignRoles")
+    public ResponseEntity<ApiResponse> assignRolesToUser(
+            @PathVariable Long userId,
+            @RequestBody RoleAssignmentRequest roleAssignmentRequest,
+            Authentication authentication) {
+
+        userService.assignRolesToUser(userId, roleAssignmentRequest.getRoleNames());
+
+        return ResponseEntity.ok(new ApiResponse(true, "Roles assigned successfully"));
     }
+
+    
+    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
+    @DeleteMapping("/{userId}/deleteRole")
+    public ResponseEntity<ApiResponse> deleteUserRole(
+            @PathVariable Long userId,
+            @RequestParam String roleName,
+            Authentication authentication) {
+
+        userService.deleteUserRole(userId, roleName, authentication);
+
+        return ResponseEntity.ok(new ApiResponse(true, "Role removed successfully"));
+    }
+
+    
+
+    
+    
 }

@@ -13,21 +13,33 @@
  */
 package com.ecoprint.printmanagement;
 
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+import com.ecoprint.printmanagement.service.RoleService;
+
 import org.springframework.context.annotation.Bean;
 
 @SpringBootApplication(scanBasePackages = "com.ecoprint.printmanagement") // Scans this package and sub-packages
 @EnableAsync
 @EnableJpaRepositories(basePackages = "com.ecoprint.printmanagement.repository")
 public class AuthAppApplication {
+	private final RoleService roleService ;
+	
+	public AuthAppApplication(RoleService roleService) {
+        this.roleService = roleService;
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(AuthAppApplication.class, args);
     }
 
-   
+    //@Bean
+    //CommandLineRunner initRoles() {
+      //  return args -> roleService.initializeRoles();
+    //}
 }

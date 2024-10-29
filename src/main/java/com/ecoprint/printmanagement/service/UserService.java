@@ -12,6 +12,8 @@
  * limitations under the License.
  */
 package com.ecoprint.printmanagement.service;
+import org.springframework.security.core.Authentication;
+
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -33,6 +35,7 @@ import com.ecoprint.printmanagement.exception.*;
 import com.ecoprint.printmanagement.model.*;
 import com.ecoprint.printmanagement.model.payload.LogOutRequest;
 import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
+import com.ecoprint.printmanagement.model.payload.RoleAssignmentRequest;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.service.ActivityLogService;
 
@@ -145,22 +148,25 @@ public class UserService {
         }
     }
 
-    public User deleteUserRole(Long userId, String roleName) {
+    public User deleteUserRole(Long userId, String roleName, Authentication authentication) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
         Role role = roleService.findByName(roleName)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
 
-        if (!currentUserHasPermissionToAssign(roleName)) {
+        if (!currentUserHasPermissionToAssign(authentication, roleName)) {
             throw new AccessDeniedException("You don't have permission to remove this role.");
         }
 
+        // Remove the role and save
         user.getRoles().remove(role);
         userRepository.save(user);
 
+        // Log role change activity
         activityLogService.logRoleChange(userId, roleName, "Role removed");
 
+        // Update permissions
         Set<Permission> updatedPermissions = user.getRoles().stream()
                 .flatMap(r -> RolePermissionMapping.rolePermissions.get(r.getRole()).stream())
                 .collect(Collectors.toSet());
@@ -168,6 +174,7 @@ public class UserService {
 
         return userRepository.save(user);
     }
+
 
     private Set<Role> getRolesForNewUser(Boolean isAdmin) {
         Set<Role> roles = new HashSet<>();
@@ -226,30 +233,39 @@ public class UserService {
         return savedUser;
     }
 
-    public User assignRoleToUser(Long userId, String roleName) {
+    public User assignRolesToUser(Long userId, Set<String> roleNames) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        Role role = roleService.findByName(roleName)
-                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
+        // For each role name in the set, find the role and add it to the user
+        Set<Role> rolesToAssign = roleNames.stream()
+                .map(roleName -> roleService.findByName(roleName)
+                        .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName)))
+                .collect(Collectors.toSet());
 
-        if (!currentUserHasPermissionToAssign(roleName)) {
-            throw new AccessDeniedException("You don't have permission to assign this role.");
-        }
+        // Ensure permissions cascade correctly
+        user.getRoles().addAll(rolesToAssign);
+        user.setPermissions(
+            user.getRoles().stream()
+                .flatMap(role -> RolePermissionMapping.rolePermissions.get(role.getRole()).stream())
+                .collect(Collectors.toSet())
+        );
 
-        user.getRoles().add(role);
         userRepository.save(user);
-
-        activityLogService.logRoleChange(userId, roleName, "Role assigned");
+        activityLogService.logRoleChange(userId, String.join(", ", roleNames), "Roles assigned");
 
         return user;
     }
 
-    private boolean currentUserHasPermissionToAssign(String roleName) {
-        CustomUserDetails currentUser = (CustomUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return currentUser.getAuthorities().stream()
-                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+
+
+    private boolean currentUserHasPermissionToAssign(Authentication authentication, String roleName) {
+        // Example logic to verify if the current authenticated user can assign the role
+        return authentication.getAuthorities().stream()
+                .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_SUPERADMIN") ||
+                                             (grantedAuthority.getAuthority().equals("ROLE_ADMIN") && !roleName.equals("ROLE_ADMIN")));
     }
+
 
     private boolean currentUserHasPermissionToAssignAdmin() {
         CustomUserDetails currentUser = (CustomUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -325,4 +341,6 @@ public class UserService {
         Optional<User> userWithEmail = userRepository.findByEmail(email);
         return userWithEmail.map(user -> user.getId().equals(userId)).orElse(false);
     }
+
+	
 }

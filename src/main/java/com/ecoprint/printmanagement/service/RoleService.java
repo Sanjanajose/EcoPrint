@@ -22,10 +22,14 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.ecoprint.printmanagement.config.RolePermissionMapping;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+import com.ecoprint.printmanagement.model.Permission;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.repository.RoleRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class RoleService {
@@ -87,4 +91,28 @@ public class RoleService {
         }
         return roleRepository.findByRole(roleEnum); // Ensure this matches
     }
+    
+    @Transactional
+    public void initializeRoles() {
+        RolePermissionMapping.rolePermissions.forEach((roleName, permissions) -> {
+            roleRepository.findByRole(roleName).ifPresentOrElse(
+                role -> {
+                    // Add only missing permissions to existing roles
+                    Set<Permission> currentPermissions = role.getPermissions();
+                    if (!currentPermissions.containsAll(permissions)) {
+                        currentPermissions.addAll(permissions);
+                        role.setPermissions(currentPermissions);
+                        roleRepository.save(role); // Save only if changes are made
+                    }
+                },
+                () -> {
+                    // Create role if it doesn't exist
+                    Role newRole = new Role(roleName);
+                    newRole.setPermissions(permissions);
+                    roleRepository.save(newRole);
+                }
+            );
+        });
+    }
+
 }
