@@ -19,6 +19,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class CustomUserDetails extends User implements UserDetails {
@@ -46,7 +47,7 @@ public class CustomUserDetails extends User implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
-        return true; // Update as per your requirement
+        return true; // Update as per your requirementFoundExcep
     }
 
     @Override
@@ -79,9 +80,9 @@ public class CustomUserDetails extends User implements UserDetails {
         }
         CustomUserDetails that = (CustomUserDetails) obj;
         return Objects.equals(getId(), that.getId());
-    }
+    
 
-    public User getUser() {
-        return this; // Returns the current User instance as this class extends User
     }
+    
+  
 }

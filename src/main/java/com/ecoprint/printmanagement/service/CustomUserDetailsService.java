@@ -24,6 +24,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.UserRepository;
 
@@ -43,9 +44,12 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         User user = dbUser.orElseThrow(() -> 
             new UsernameNotFoundException("Couldn't find a matching user email in the database for " + email));
+        
+        return dbUser.map(CustomUserDetails::new)
+        		.orElseThrow(()  -> new UsernameNotFoundException("Couldn't find a matching user email in the database for " + email));
 
         // Convert roles and permissions to Spring Security's SimpleGrantedAuthority
-        Set<SimpleGrantedAuthority> authorities = user.getRoles().stream()
+/**        Set<SimpleGrantedAuthority> authorities = user.getRoles().stream()
             .map(role -> new SimpleGrantedAuthority(role.getRole().name()))
             .collect(Collectors.toSet());
 
@@ -57,7 +61,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         return new org.springframework.security.core.userdetails.User(
             user.getUsername(),
             user.getPassword(),
-            authorities);
+            authorities); **/
     }
 
     public UserDetails loadUserById(Long id) {

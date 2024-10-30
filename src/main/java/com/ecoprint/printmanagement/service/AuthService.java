@@ -181,14 +181,15 @@ public class AuthService {
             new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
         );
 
+        
         CustomUserDetails customUserDetails = (CustomUserDetails) authentication.getPrincipal();
-        User user = customUserDetails.getUser();
+        
 
         // Generate the JWT token using the "remember me" flag
         String token = tokenProvider.generateToken(customUserDetails, loginRequest.isRememberMe());
 
         // Log the login action
-        activityLogService.logAction("User logged in", user.getUsername(), user.getId(),
+        activityLogService.logAction("User logged in", customUserDetails.getUsername(), customUserDetails.getId(),
             "User logged in from device: " + loginRequest.getDeviceInfo().getDeviceType());
 
         // Return the authentication wrapped in an Optional

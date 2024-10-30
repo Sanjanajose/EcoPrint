@@ -38,17 +38,19 @@ public class LoginRequest {
     @NotNull(message = "Device info cannot be null")
     @Schema(name = "Device info", required = true, type = "object", allowableValues = "A valid " +
             "deviceInfo object")
+    private DeviceInfo deviceInfo;
     
     
     private boolean rememberMe;
 
-    private DeviceInfo deviceInfo;
+    
 
-    public LoginRequest(String username, String email, String password, DeviceInfo deviceInfo) {
+    public LoginRequest(String username, String email, String password, DeviceInfo deviceInfo, boolean rememberMe ) {
         this.username = username;
         this.email = email;
         this.password = password;
         this.deviceInfo = deviceInfo;
+        this.rememberMe =rememberMe;
     }
 
     public LoginRequest() {
