@@ -99,7 +99,21 @@ public class User extends DateAudit {
     @Column(name = "TWO_FACTOR_ENABLED", nullable = false)
     private boolean twoFactorEnabled = false;
     
-    @Column(name = "IS_ADMIN", nullable = false)
+    @Column(name = "preferred_2fa_method")
+    private String preferred2FAMethod;
+
+    
+    
+    public String getPreferred2FAMethod() {
+		return preferred2FAMethod;
+	}
+
+	public void setPreferred2FAMethod(String preferred2faMethod) {
+		preferred2FAMethod = preferred2faMethod;
+	}
+
+
+	@Column(name = "IS_ADMIN", nullable = false)
     private Boolean isAdmin = false; // Default to false
 
     

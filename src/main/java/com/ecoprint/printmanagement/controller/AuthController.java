@@ -29,11 +29,14 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.ecoprint.printmanagement.event.*;
 import com.ecoprint.printmanagement.exception.*;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.*;
 import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
 import com.ecoprint.printmanagement.model.token.RefreshToken;
 import com.ecoprint.printmanagement.security.JwtTokenProvider;
 import com.ecoprint.printmanagement.service.AuthService;
+import com.ecoprint.printmanagement.service.MailService;
+import com.ecoprint.printmanagement.service.OTPService;
 import com.ecoprint.printmanagement.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +52,13 @@ public class AuthController {
     private final JwtTokenProvider tokenProvider;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final UserService userService; 
+    
+    @Autowired 
+    MailService mailService;
+    
+    @Autowired 
+    OTPService otpService;
+
 
     @Autowired
     public AuthController(AuthService authService, JwtTokenProvider tokenProvider, 
@@ -90,6 +100,31 @@ public class AuthController {
                 })
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
+
+    @Operation(summary = "Checks if the given username is in use")
+    @PostMapping("/userLogin2fa")
+    public ResponseEntity<String> userLogin2fa(@RequestBody LoginRequest request) {
+        User user = authService.validateUserCredentials(request.getUsername(), request.getPassword());
+
+                
+        
+        if (user != null && user.isTwoFactorEnabled()) {
+            String otp = otpService.generateAndSaveOTP(user.getId());
+
+            // Send OTP via email or SMS based on user preference
+            if (user.getPreferred2FAMethod().equals("email")) {
+            	mailService.sendOTPEmail(user.getEmail(), otp);
+            }/* else if (user.getPreferred2FAMethod().equals("sms")) {
+                smsService.sendOTPSMS(user.getPhoneNumber(), otp);
+            }*/
+
+            return ResponseEntity.ok("OTP sent. Please check your " + user.getPreferred2FAMethod());
+        }
+
+        // Handle non-2FA login
+        return ResponseEntity.ok("Login successful");
+    }
+ 
 
     @PostMapping("/register")
     @Operation(summary = "Registers the user and publishes an event to generate the email verification")
