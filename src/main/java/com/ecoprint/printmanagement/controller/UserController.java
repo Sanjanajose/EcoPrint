@@ -13,12 +13,13 @@
  */
 package com.ecoprint.printmanagement.controller;
 import org.springframework.security.core.Authentication;
-
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.repository.query.Param;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,6 +39,7 @@ import com.ecoprint.printmanagement.annotation.CurrentUser;
 import com.ecoprint.printmanagement.event.OnUserAccountChangeEvent;
 import com.ecoprint.printmanagement.event.OnUserLogoutSuccessEvent;
 import com.ecoprint.printmanagement.exception.FileUploadException;
+import com.ecoprint.printmanagement.exception.InvalidTokenRequestException;
 import com.ecoprint.printmanagement.exception.UpdatePasswordException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.User;
@@ -69,12 +71,16 @@ public class UserController {
         this.applicationEventPublisher = applicationEventPublisher;
     }
 
+    /**
+     * Gets the current user profile of the logged in user
+     */
     @GetMapping("/me")
     @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Returns the current user profile")
-    public ResponseEntity<?> getUserProfile(@CurrentUser CustomUserDetails currentUser) {
-        return ResponseEntity.ok(currentUser);
-    }
+    public ResponseEntity getUserProfile(@CurrentUser CustomUserDetails currentUser) {
+//        logger.info(currentUser.getEmail() + " has role: " + currentUser.getRoles());
+        return ResponseEntity.ok("Hello. This is about me");
+    }    
 
     @GetMapping("/admins")
     @PreAuthorize("hasRole('ADMIN')")
@@ -83,11 +89,16 @@ public class UserController {
         return ResponseEntity.ok("Hello. This is about admins");
     }
 
-    @PostMapping("/password/update")
-    @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "Allows the user to change their password once logged in by supplying the correct current password")
-    public ResponseEntity<?> updateUserPassword(@CurrentUser CustomUserDetails customUserDetails,
-                                             @Valid @RequestBody UpdatePasswordRequest updatePasswordRequest) {
+    /**
+     * Updates the password of the current logged in user
+     */
+    /**@PostMapping("/password/update")
+    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    @Operation(summary = "Allows the user to change his password once logged in by supplying the correct current " +
+            "password")
+    public ResponseEntity updateUserPassword(@CurrentUser CustomUserDetails customUserDetails,
+                                             @Param(value = "The UpdatePasswordRequest payload") @Valid @RequestBody UpdatePasswordRequest updatePasswordRequest) {
+
         return authService.updatePassword(customUserDetails, updatePasswordRequest)
                 .map(updatedUser -> {
                     OnUserAccountChangeEvent onUserPasswordChangeEvent = new OnUserAccountChangeEvent(updatedUser,
@@ -96,9 +107,32 @@ public class UserController {
                     return ResponseEntity.ok(new ApiResponse(true, "Password changed successfully"));
                 })
                 .orElseThrow(() -> new UpdatePasswordException("--Empty--", "No such user present."));
+    }**/
+    
+    @PostMapping("/password/update")
+    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    @Operation(summary = "Allows the user to change their password once logged in by supplying the correct current password")
+    public ResponseEntity<ApiResponse> updateUserPassword(
+            @CurrentUser CustomUserDetails customUserDetails,
+            @Param(value = "The UpdatePasswordRequest payload") @Valid @RequestBody UpdatePasswordRequest updatePasswordRequest) {
+
+        return authService.updatePassword(customUserDetails, updatePasswordRequest)
+                .map(updatedUser -> {
+                    // Trigger an event for password update success
+                    OnUserAccountChangeEvent onUserPasswordChangeEvent = new OnUserAccountChangeEvent(
+                            updatedUser, "Update Password", "Change successful");
+                    applicationEventPublisher.publishEvent(onUserPasswordChangeEvent);
+                    
+                    // Return success response
+                    return new ApiResponse(true, "Password changed successfully");
+                })
+                .map(ResponseEntity::ok)
+                .orElseThrow(() -> new UpdatePasswordException("--Empty--", "No such user present."));
     }
 
-    @PostMapping("/logout")
+
+
+    /**@PostMapping("/logout")
     @Operation(summary = "Logs the specified user device and clears the refresh tokens associated with it")
     public ResponseEntity<?> logoutUser(@CurrentUser CustomUserDetails customUserDetails,
                                      @Valid @RequestBody LogOutRequest logOutRequest) {
@@ -109,7 +143,40 @@ public class UserController {
                 credentials.toString(), logOutRequest);
         applicationEventPublisher.publishEvent(logoutSuccessEvent);
         return ResponseEntity.ok(new ApiResponse(true, "Log out successful"));
+    } **/
+    
+    @PostMapping("/logout")
+    @Operation(summary = "Logs the specified user device and clears the refresh tokens associated with it")
+    public ResponseEntity<?> logoutUser(
+            @Valid @RequestBody LogOutRequest logOutRequest) {
+        // Retrieve CustomUserDetails from the SecurityContext
+        CustomUserDetails customUserDetails;
+        try {
+            customUserDetails = (CustomUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        } catch (ClassCastException e) {
+            throw new InvalidTokenRequestException("JWT", "principal", "Invalid authentication principal");
+        }
+
+        // Call logout functionality in the service
+        userService.logoutUser(customUserDetails, logOutRequest);
+
+        // Publish logout success event
+        Object credentials = SecurityContextHolder.getContext().getAuthentication().getCredentials();
+        OnUserLogoutSuccessEvent logoutSuccessEvent = new OnUserLogoutSuccessEvent(
+                customUserDetails.getEmail(),
+                credentials.toString(),
+                logOutRequest
+        );
+        applicationEventPublisher.publishEvent(logoutSuccessEvent);
+
+        return ResponseEntity.ok(new ApiResponse(true, "Log out successful"));
     }
+
+    
+    
+   
+
+
 
     @GetMapping("/resetPassword")
     @PreAuthorize("hasRole('ADMIN')")

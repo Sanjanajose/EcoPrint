@@ -283,6 +283,8 @@ public class UserService {
         refreshTokenService.deleteById(userDevice.getRefreshToken().getId());
     }
 
+    
+    
     public void setAdminAccess(String email) {
         User currentUser = findByEmail(email)
             .orElseThrow(() -> new SetAdminAccessException(email, "No matching user found"));

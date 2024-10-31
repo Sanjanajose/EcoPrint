@@ -27,6 +27,7 @@ import com.ecoprint.printmanagement.service.CustomUserDetailsService;
 @EnableMethodSecurity(prePostEnabled = true)
 public class WebSecurityConfig {
 
+	@Autowired
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint jwtEntryPoint;
 
