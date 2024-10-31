@@ -25,22 +25,28 @@ public class OTPService {
 
         // Save OTP to database
         OTP otp = new OTP(userId, userId, otpCode, expiryTime);
-        otp.setUserId(userId);
-        otp.setOtpCode(otpCode);
-        otp.setExpiryTime(expiryTime); 
+        // OTP otp = new OTP(null, userId, otpCode, expiryTime); // 'null' for id since it's auto-generated
+       
+        // Save OTP to database
         otpRepository.save(otp);
         return otpCode;
     }
-/*
-    public boolean validateOTP(Long userId, String otpCode) {
-        Optional<OTP> otp = otpRepository.findByUserIdAndOtpCode(userId, otpCode);
     
-        if (otp.getExpiryTime().isAfter(LocalDateTime.now())) {
-            otpRepository.deleteById(otp); // Optional: delete OTP after successful validation
-            return true;
+            
+    
+    public boolean validateOTP(Long userId, String otpCode) {
+        Optional<OTP> otpOptional = otpRepository.findByUserIdAndOtpCode(userId, otpCode);
+
+        if (otpOptional.isPresent()) {
+            OTP otp = otpOptional.get(); // Retrieve the OTP object
+            if (otp.getExpiryTime().isAfter(LocalDateTime.now())) {
+                otpRepository.delete(otp); // Optional: Delete OTP after successful validation
+                return true;
+            }
         }
         return false;
-    }*/
+    }
+
 
 
 }

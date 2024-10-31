@@ -14,11 +14,6 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "otp")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-
 public class OTP {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -72,6 +67,11 @@ public class OTP {
 	public void setExpiryTime(LocalDateTime expiryTime) {
 		this.expiryTime = expiryTime;
 	}
+	
+    
+    public OTP() {
+    }
+
 
 
 }

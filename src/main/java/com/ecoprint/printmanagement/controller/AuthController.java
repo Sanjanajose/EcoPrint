@@ -18,6 +18,7 @@ import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,6 +30,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.ecoprint.printmanagement.event.*;
 import com.ecoprint.printmanagement.exception.*;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+import com.ecoprint.printmanagement.model.LoginRequest2FA;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.*;
 import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
@@ -54,10 +56,10 @@ public class AuthController {
     private final UserService userService; 
     
     @Autowired 
-    MailService mailService;
+    private MailService mailService;
     
     @Autowired 
-    OTPService otpService;
+    private OTPService otpService;
 
 
     @Autowired
@@ -101,30 +103,49 @@ public class AuthController {
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
 
-    @Operation(summary = "Checks if the given username is in use")
-    @PostMapping("/userLogin2fa")
-    public ResponseEntity<String> userLogin2fa(@RequestBody LoginRequest request) {
-        User user = authService.validateUserCredentials(request.getUsername(), request.getPassword());
 
-                
-        
-        if (user != null && user.isTwoFactorEnabled()) {
-            String otp = otpService.generateAndSaveOTP(user.getId());
 
-            // Send OTP via email or SMS based on user preference
-            if (user.getPreferred2FAMethod().equals("email")) {
-            	mailService.sendOTPEmail(user.getEmail(), otp);
-            }/* else if (user.getPreferred2FAMethod().equals("sms")) {
-                smsService.sendOTPSMS(user.getPhoneNumber(), otp);
-            }*/
+@PostMapping("/userLogin2fa")
+@Operation(summary = "User login with two-factor authentication (2FA)")
+public ResponseEntity<String> login(@RequestBody LoginRequest2FA request) {
+    //  Validate user credentials
+    User user = authService.validateUserCredentials(request.getUsername(), request.getPassword());
 
-            return ResponseEntity.ok("OTP sent. Please check your " + user.getPreferred2FAMethod());
+    //  If credentials are valid and user exists
+    if (user != null) {
+
+        // Check if 2FA is enabled for this user
+        if (user.isTwoFactorEnabled()) {
+            // Check if OTP is already provided
+        	if (request.getOtp() != null) {
+                // Validate the provided OTP
+                boolean isValidOtp = otpService.validateOTP(user.getId(), request.getOtp());
+                if (isValidOtp) {
+                    return ResponseEntity.ok("Login successful with 2FA verification");
+                } else {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body("Invalid or expired OTP. Please try again.");
+                }
+            } else {
+                // Generate and send OTP if not provided
+                String otp = otpService.generateAndSaveOTP(user.getId());
+                if (user.getPreferred2FAMethod().equals("mail")) {
+                	mailService.sendOTPEmail(user.getEmail(), otp);
+                }/* else if (user.getPreferred2FAMethod().equals("sms")) {
+                	smsService.sendOTPSMS(user.getPhone(), otp);
+                }*/
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("OTP sent. Please enter the OTP to complete login.");
+            }
         }
 
-        // Handle non-2FA login
         return ResponseEntity.ok("Login successful");
     }
- 
+
+    // If credentials are invalid, respond with Unauthorized status
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid username or password");
+}
+
 
     @PostMapping("/register")
     @Operation(summary = "Registers the user and publishes an event to generate the email verification")

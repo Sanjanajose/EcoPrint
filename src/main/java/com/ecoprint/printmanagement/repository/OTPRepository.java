@@ -16,14 +16,15 @@ public interface OTPRepository extends JpaRepository<OTP, Long>{
      * @param otpCode The one-time password (OTP) code.
      * @return An Optional containing the OTP if found, or empty if not found.
      */
+    // Find an OTP by user ID and OTP code
     Optional<OTP> findByUserIdAndOtpCode(Long userId, String otpCode);
 
-    /**
-     * Delete all expired OTPs.
-     *
-     * @param expiryTime Time threshold for expiry.
-     */
-    void deleteByExpiryTimeBefore(LocalDateTime expiryTime);
+    // Optional: Delete OTPs for a specific user (if you want to clear old OTPs after successful validation)
+    void deleteByUserId(Long userId);
+
+    // Optional: Find OTPs that have expired
+    // Note: expiryTime should be a field in the OTP entity
+    void deleteByExpiryTimeBefore(LocalDateTime currentDateTime);
 
 
 }
