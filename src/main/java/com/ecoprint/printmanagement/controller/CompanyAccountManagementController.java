@@ -46,7 +46,7 @@ public class CompanyAccountManagementController {
         try {
             // Get adminId from the authenticated user's session Assigned this value because of the super Admin
            Long adminId = 3L;
-        	CompanyDetails savedAccount = companyAccountService.createCompanyAccount(companyDetails,adminId);
+        	CompanyDetails savedAccount = companyAccountService.createCompanyAccount(companyDetails);
             return new ResponseEntity<>(savedAccount, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
             Map<String, String> errorResponse = new HashMap<>();

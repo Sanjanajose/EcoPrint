@@ -6,7 +6,7 @@ import com.ecoprint.printmanagement.model.CompanyDetails;
 
 public interface CompanyAccountService {
 
-	CompanyDetails createCompanyAccount(CompanyDetails companyDetails, Long adminId);
+	CompanyDetails createCompanyAccount(CompanyDetails companyDetails);
     CompanyDetails updateCompanyAccount(Long companyId, CompanyDetails CompanyDetails);
     void deleteCompanyAccount(Long companyId);
     CompanyDetails deactivateAccount(Long companyId);
