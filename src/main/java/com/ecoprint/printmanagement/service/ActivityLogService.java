@@ -18,22 +18,36 @@ public class ActivityLogService {
         this.activityLogRepository = activityLogRepository;
     }
 
- // Method to log a generic user action
+    // Method to log a generic user action
     public void logAction(String action, String username, Long userId, String description) {
-        // Logic for saving a new ActivityLog with the given details
-        System.out.println("Action: " + action + ", User: " + username + ", User ID: " + userId + ", Description: " + description);
-        // Actual implementation should save to the database.
+        ActivityLog log = new ActivityLog(
+            action,
+            username,
+            LocalDateTime.now(),
+            description,
+            userId,
+            "User action: " + description
+        );
+        activityLogRepository.save(log);  // Persist log to the database
+        System.out.println("Action logged: " + action + " by " + username);
     }
 
     // Method to log changes in user roles
-    public void logRoleChange(Long userId, String roleName, String action) {
-        // Logic for saving a role change ActivityLog with the given details
-        System.out.println("Role Change Action: " + action + ", Role: " + roleName + ", User ID: " + userId);
-        // Actual implementation should save to the database.
+    public void logRoleChange(Long userId, String roleNames, String action) {
+        ActivityLog log = new ActivityLog(
+            action,
+            "System Admin",  // Replace with the actual username of the Admin/Super Admin
+            LocalDateTime.now(),
+            "Assigned roles: " + roleNames + " to user with ID: " + userId,
+            userId,
+            "Role change action"
+        );
+        activityLogRepository.save(log);  // Persist log to the database
+        System.out.println("Role change logged: " + action + " for User ID: " + userId);
     }
 
-// Add getAllLogs method to fetch all activity logs
+    // Method to fetch all activity logs
     public List<ActivityLog> getAllLogs() {
-        return activityLogRepository.findAll();  // Retrieves all logs from the database
+        return activityLogRepository.findAll();
     }
 }

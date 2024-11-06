@@ -37,7 +37,7 @@ public class UserDevice extends DateAudit {
     @SequenceGenerator(name = "user_device_seq", allocationSize = 1)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "USER_ID", nullable = false)
     private User user;
 

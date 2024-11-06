@@ -66,7 +66,7 @@ public class RoleService {
      * Get a role by name, throwing exception if not found.
      */
     public Role getRoleByName(RoleName roleName) {
-        return findByRole(roleName) // Use findByRole for safer handling
+        return findByRole(roleName)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
     }
 
@@ -75,7 +75,7 @@ public class RoleService {
      */
     public Set<Role> getRolesByName(Set<RoleName> roleNames) {
         return roleNames.stream()
-                .map(this::getRoleByName) // Use getRoleByName for retrieval
+                .map(this::getRoleByName)
                 .collect(Collectors.toSet());
     }
 
@@ -89,7 +89,7 @@ public class RoleService {
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
         }
-        return roleRepository.findByRole(roleEnum); // Ensure this matches
+        return roleRepository.findByRole(roleEnum);
     }
     
     @Transactional
@@ -97,16 +97,14 @@ public class RoleService {
         RolePermissionMapping.rolePermissions.forEach((roleName, permissions) -> {
             roleRepository.findByRole(roleName).ifPresentOrElse(
                 role -> {
-                    // Add only missing permissions to existing roles
                     Set<Permission> currentPermissions = role.getPermissions();
                     if (!currentPermissions.containsAll(permissions)) {
                         currentPermissions.addAll(permissions);
                         role.setPermissions(currentPermissions);
-                        roleRepository.save(role); // Save only if changes are made
+                        roleRepository.save(role);
                     }
                 },
                 () -> {
-                    // Create role if it doesn't exist
                     Role newRole = new Role(roleName);
                     newRole.setPermissions(permissions);
                     roleRepository.save(newRole);
@@ -115,4 +113,39 @@ public class RoleService {
         });
     }
 
+    /**
+     * Add a permission to a role.
+     */
+    @Transactional
+    public void addPermissionToRole(RoleName roleName, Permission permission) {
+        Role role = getRoleByName(roleName);
+        Set<Permission> permissions = role.getPermissions();
+        if (!permissions.contains(permission)) {
+            permissions.add(permission);
+            role.setPermissions(permissions);
+            roleRepository.save(role);
+        }
+    }
+
+    /**
+     * Remove a permission from a role.
+     */
+    @Transactional
+    public void removePermissionFromRole(RoleName roleName, Permission permission) {
+        Role role = getRoleByName(roleName);
+        Set<Permission> permissions = role.getPermissions();
+        if (permissions.contains(permission)) {
+            permissions.remove(permission);
+            role.setPermissions(permissions);
+            roleRepository.save(role);
+        }
+    }
+
+    /**
+     * Get all permissions for a role.
+     */
+    public Set<Permission> getPermissionsForRole(RoleName roleName) {
+        Role role = getRoleByName(roleName);
+        return role.getPermissions();
+    }
 }

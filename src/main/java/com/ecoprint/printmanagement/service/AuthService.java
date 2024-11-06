@@ -174,7 +174,11 @@ public class AuthService {
         return passwordEncoder.matches(password, currentUser.getPassword());
     }
 
-    public Optional<User> updatePassword(CustomUserDetails customUserDetails, UpdatePasswordRequest updatePasswordRequest) {
+    /**public Optional<User> updatePassword(CustomUserDetails customUserDetails, UpdatePasswordRequest updatePasswordRequest) {
+        if (customUserDetails == null) {
+            throw new UpdatePasswordException("--Empty--", "User details not available in context");
+        }
+
         String email = customUserDetails.getEmail();
         User currentUser = userService.findByEmail(email)
                 .orElseThrow(() -> new UpdatePasswordException(email, "No matching user found"));
@@ -182,16 +186,43 @@ public class AuthService {
         if (!currentPasswordMatches(currentUser, updatePasswordRequest.getOldPassword())) {
             throw new UpdatePasswordException(currentUser.getEmail(), "Invalid current password");
         }
+
         String newPassword = passwordEncoder.encode(updatePasswordRequest.getNewPassword());
         currentUser.setPassword(newPassword);
         userService.save(currentUser);
+        return Optional.of(currentUser);
+    } **/
+    
+    public Optional<User> updatePassword(CustomUserDetails customUserDetails, UpdatePasswordRequest updatePasswordRequest) {
+        if (customUserDetails == null) {
+            System.out.println("Error: customUserDetails is null. No authentication details available in the SecurityContext.");
+            throw new UpdatePasswordException("--Empty--", "User details not available in context");
+        }
 
-        // Log the password update action
-        activityLogService.logAction("Password updated", currentUser.getUsername(), currentUser.getId(),
-            "User updated their password");
+        // Check if the object is an instance of CustomUserDetails
+        if (!(customUserDetails instanceof CustomUserDetails)) {
+            System.out.println("Warning: Retrieved UserDetails is not an instance of CustomUserDetails.");
+        } else {
+            System.out.println("Success: Retrieved instance of CustomUserDetails from SecurityContext.");
+        }
 
+        // Proceed with your password update logic
+        String email = customUserDetails.getEmail();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new UpdatePasswordException(email, "No matching user found"));
+
+        if (!currentPasswordMatches(currentUser, updatePasswordRequest.getOldPassword())) {
+            throw new UpdatePasswordException(currentUser.getEmail(), "Invalid current password");
+        }
+
+        String newPassword = passwordEncoder.encode(updatePasswordRequest.getNewPassword());
+        currentUser.setPassword(newPassword);
+        userService.save(currentUser);
         return Optional.of(currentUser);
     }
+
+
+
 
     public String generateToken(CustomUserDetails customUserDetails) {
     	
@@ -243,6 +274,15 @@ public class AuthService {
         return Optional.ofNullable(refreshToken);
     }
 
+    
+    
+    
+    /**
+     * Refresh the expired jwt token using a refresh token and device info. The
+     * * refresh token is mapped to a specific device and if it is unexpired, can help
+     * * generate a new jwt. If the refresh token is inactive for a device or it is expired,
+     * * throw appropriate errors.
+     */
     public Optional<String> refreshJwtToken(TokenRefreshRequest tokenRefreshRequest) {
         String requestRefreshToken = tokenRefreshRequest.getRefreshToken();
 
@@ -257,8 +297,10 @@ public class AuthService {
                 .map(UserDevice::getUser)
                 .map(CustomUserDetails::new)
                 .map(this::generateToken))
-                .orElseThrow(() -> new TokenRefreshException(requestRefreshToken, "Missing refresh token in database. Please login again"));
+                .orElseThrow(() -> new TokenRefreshException(requestRefreshToken, "Missing refresh token in database.Please login again"));
     }
+
+
 
     public Optional<PasswordResetToken> generatePasswordResetToken(PasswordResetLinkRequest passwordResetLinkRequest) {
         String email = passwordResetLinkRequest.getEmail();
