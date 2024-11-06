@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 
@@ -37,6 +38,16 @@ public class PrintJob {
 
     @Column(name = "upload_timestamp", nullable = false)
     private LocalDateTime uploadTimestamp;
+    
+    @Column(name = "description", length = 500)
+    private String description;  // Field to store the job description
+
+        
+    @Lob
+    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = false)
+    private byte[] fileData;  // Field to store the file content
+
+    
     
     // Getters and Setters
 
@@ -86,6 +97,22 @@ public class PrintJob {
 
 	public void setUploadTimestamp(LocalDateTime uploadTimestamp) {
 		this.uploadTimestamp = uploadTimestamp;
+	}
+
+	public byte[] getFileData() {
+		return fileData;
+	}
+
+	public void setFileData(byte[] fileData) {
+		this.fileData = fileData;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public void setDescription(String description) {
+		this.description = description;
 	}
 
    

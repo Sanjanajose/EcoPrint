@@ -1,82 +1,96 @@
 package com.ecoprint.printmanagement.service;
 
-import com.ecoprint.printmanagement.model.PrintJob;
-import com.ecoprint.printmanagement.repository.PrintJobRepository;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+
 import org.apache.tika.Tika;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
+import com.ecoprint.printmanagement.model.PrintJob;
+import com.ecoprint.printmanagement.repository.PrintJobRepository;
 
 @Service
 public class PrintJobService {
 
-    private final Path uploadDir = Paths.get("uploads");
-    private final Tika tika = new Tika();
-
-    @Value("${file.max-size}")
-    private long maxSize; // Maximum file size, injected from application.properties
-
     private final PrintJobRepository printJobRepository;
+    private final Tika tika = new Tika(); // For MIME type detection
+    private final long maxSize = 5 * 1024 * 1024; // Example: 5 MB size limit
 
-    public PrintJobService(PrintJobRepository printJobRepository) throws IOException {
+    public PrintJobService(PrintJobRepository printJobRepository) {
         this.printJobRepository = printJobRepository;
-
-        // Ensure the upload directory exists
-        if (!Files.exists(uploadDir)) {
-            Files.createDirectories(uploadDir);
-        }
     }
 
-    public void uploadFile(MultipartFile file, String userName) throws IOException {
-        // Validate file size and content before processing
+    public void uploadFile(MultipartFile file, String userName,String description) throws IOException {
+        // Validate file size
         if (file.isEmpty()) {
             throw new IllegalArgumentException("File is empty");
         }
-
         if (file.getSize() > maxSize) {
-            throw new IllegalArgumentException("File size exceeds limit");
+            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (maxSize / (1024 * 1024)) + " MB");
         }
 
         // Validate file type
         String fileType = tika.detect(file.getInputStream());
         validateFileType(fileType);
 
-        // Define the file path where it will be saved
-        String fileName = file.getOriginalFilename();
-        Path filePath = uploadDir.resolve(fileName);
+        // Convert file content to byte array for database storage
+        byte[] fileData = file.getBytes();
 
-        // Save the file to the specified path
-        Files.copy(file.getInputStream(), filePath);
-
-        // Create a PrintJob entity and set its metadata
+        // Create and populate PrintJob entity with metadata and file data
         PrintJob printJob = new PrintJob();
-        printJob.setFileName(fileName);
+        printJob.setFileName(file.getOriginalFilename());
         printJob.setFileType(fileType);
         printJob.setFileSize(file.getSize());
         printJob.setUserName(userName);
         printJob.setUploadTimestamp(LocalDateTime.now());
+        printJob.setFileData(fileData);  // Set the file data for database storage
+        printJob.setDescription(description);  // Set the description
 
-        // Save metadata to the database
-        saveFileMetadata(printJob);
-    }
 
-    // Validate allowed file types
-    private void validateFileType(String fileType) {
-        // Example: Only allow PDF and DOCX files
-        if (!fileType.equals("application/pdf") && 
-            !fileType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-            throw new IllegalArgumentException("File type not supported");
-        }
-    }    
-
-    // Save metadata to the database
-    private void saveFileMetadata(PrintJob printJob) {
+        // Save the PrintJob entity to the database
         printJobRepository.save(printJob);
     }
+
+    private void validateFileType(String fileType) {
+        // List of allowed MIME types
+        List<String> allowedFileTypes = Arrays.asList(
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "text/plain",
+            "image/jpeg",
+            "image/png",
+            "image/tiff",
+            "image/bmp",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "text/csv"
+        );
+
+        if (!allowedFileTypes.contains(fileType)) {
+            throw new IllegalArgumentException("File type not supported");
+        }
+    }
+    
+   
+    // Method to retrieve file data as Resource by ID
+    public Resource downloadFile(Long id) {
+        PrintJob printJob = findPrintJobById(id); // Fetches the PrintJob entity
+        return new ByteArrayResource(printJob.getFileData()); // Returns file data as Resource
+    }
+
+    // Method to retrieve PrintJob metadata by ID
+    public PrintJob findPrintJobById(Long id) {
+        return printJobRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("File not found with id: " + id));
+    }
+
+   
 }
