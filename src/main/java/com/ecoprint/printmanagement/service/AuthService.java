@@ -94,7 +94,7 @@ public class AuthService {
         User registeredNewUser = userService.save(newUser);
 
         // Log the registration action
-        activityLogService.logAction("User registered", registeredNewUser.getUsername(), registeredNewUser.getId(),
+        activityLogService.logActivity("User registered", registeredNewUser.getUsername(), registeredNewUser.getId(),
             "User registered with email: " + registeredNewUser.getEmail());
 
         return Optional.ofNullable(registeredNewUser);
@@ -107,11 +107,6 @@ public class AuthService {
     public Boolean usernameAlreadyExists(String username) {
         return userService.existsByUsername(username);
     }
-
-    
-    
-    
-    
 
 
 
@@ -132,7 +127,7 @@ public class AuthService {
         userService.save(registeredUser);
 
         // Log the email verification action
-        activityLogService.logAction("Email verified", registeredUser.getUsername(), registeredUser.getId(),
+        activityLogService.logActivity("Email verified", registeredUser.getUsername(), registeredUser.getId(),
             "User verified their email address.");
 
         return Optional.of(registeredUser);
@@ -220,7 +215,7 @@ public class AuthService {
         String token = tokenProvider.generateToken(customUserDetails, loginRequest.isRememberMe());
 
         // Log the login action
-        activityLogService.logAction("User logged in", customUserDetails.getUsername(), customUserDetails.getId(),
+        activityLogService.logActivity("User logged in", customUserDetails.getUsername(), customUserDetails.getId(),
             "User logged in from device: " + loginRequest.getDeviceInfo().getDeviceType());
 
         // Return the authentication wrapped in an Optional
@@ -299,7 +294,7 @@ public class AuthService {
                     userService.save(user);
 
                     // Log the password reset action
-                    activityLogService.logAction("Password reset", user.getUsername(), user.getId(),
+                    activityLogService.logActivity("Password reset", user.getUsername(), user.getId(),
                         "User reset their password using a reset token.");
 
                     return user;
@@ -320,7 +315,7 @@ public class AuthService {
             mailService.sendTempPassword(tempPassword, email);
 
             // Log the temporary password reset action
-            activityLogService.logAction("Temporary password sent", currentUser.getUsername(), currentUser.getId(),
+            activityLogService.logActivity("Temporary password sent", currentUser.getUsername(), currentUser.getId(),
                 "User was sent a temporary password.");
         } catch (IOException | TemplateException | MessagingException e) {
             throw new MailSendException(email, "Password Reset");

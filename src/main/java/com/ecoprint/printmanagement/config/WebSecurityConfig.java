@@ -55,6 +55,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/admin/**").hasAuthority(Permission.MANAGE_USERS.name())  // Admin-only access
                         .requestMatchers("/tech/**").hasAuthority(Permission.MANAGE_TECH_TASKS.name())  // Technician access
                         .requestMatchers("/public/**").permitAll()  // Publicly accessible
+                        .requestMatchers("/api/metrics/**").hasRole("ADMIN") // Only ADMIN can access these endpoints
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptionHandling -> exceptionHandling.authenticationEntryPoint(jwtEntryPoint))

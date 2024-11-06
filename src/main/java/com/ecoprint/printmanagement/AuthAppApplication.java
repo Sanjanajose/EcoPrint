@@ -13,6 +13,7 @@
  */
 package com.ecoprint.printmanagement;
 
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -27,6 +28,7 @@ import org.springframework.context.annotation.Bean;
 @SpringBootApplication(scanBasePackages = "com.ecoprint.printmanagement") // Scans this package and sub-packages
 @EnableAsync
 @EnableJpaRepositories(basePackages = "com.ecoprint.printmanagement.repository")
+@EnableScheduling
 public class AuthAppApplication {
 	private final RoleService roleService ;
 	
@@ -43,3 +45,11 @@ public class AuthAppApplication {
       //  return args -> roleService.initializeRoles();
     //}
 }
+
+
+
+
+
+
+
+    

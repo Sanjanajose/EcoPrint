@@ -137,7 +137,7 @@ public class UserService {
         User savedUser = userRepository.save(newUser);
 
         // Log user creation
-        activityLogService.logAction("User created", newUser.getUsername(), newUser.getId(), "New user registered.");
+        activityLogService.logActivity("User created", newUser.getUsername(), newUser.getId(), "New user registered.");
 
         return savedUser;
     }
@@ -228,7 +228,7 @@ public class UserService {
 
         User savedUser = userRepository.save(user);
 
-        activityLogService.logAction("User updated", user.getUsername(), user.getId(), "User updated their details.");
+        activityLogService.logActivity("User updated", user.getUsername(), user.getId(), "User updated their details.");
 
         return savedUser;
     }
@@ -282,6 +282,7 @@ public class UserService {
 
         refreshTokenService.deleteById(userDevice.getRefreshToken().getId());
     }
+
 
     
     

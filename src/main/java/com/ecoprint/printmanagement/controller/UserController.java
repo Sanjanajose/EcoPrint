@@ -49,6 +49,7 @@ import com.ecoprint.printmanagement.model.payload.RoleAssignmentRequest;
 import com.ecoprint.printmanagement.model.payload.UpdatePasswordRequest;
 import com.ecoprint.printmanagement.model.payload.UserUpdateRequest;
 import com.ecoprint.printmanagement.service.AuthService;
+import com.ecoprint.printmanagement.service.UserActivityService;
 import com.ecoprint.printmanagement.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,6 +64,9 @@ public class UserController {
     private final AuthService authService;
     private final UserService userService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    
+    @Autowired
+    private UserActivityService userActivityService;
 
     @Autowired
     public UserController(AuthService authService, UserService userService, ApplicationEventPublisher applicationEventPublisher) {
@@ -118,6 +122,9 @@ public class UserController {
 
         return authService.updatePassword(customUserDetails, updatePasswordRequest)
                 .map(updatedUser -> {
+                    // Log password update activity
+                    userActivityService.logUserActivity(updatedUser.getId(), "PASSWORD_UPDATE", "User password changed successfully");
+
                     // Trigger an event for password update success
                     OnUserAccountChangeEvent onUserPasswordChangeEvent = new OnUserAccountChangeEvent(
                             updatedUser, "Update Password", "Change successful");
@@ -147,32 +154,24 @@ public class UserController {
     
     @PostMapping("/logout")
     @Operation(summary = "Logs the specified user device and clears the refresh tokens associated with it")
-    public ResponseEntity<?> logoutUser(
-            @Valid @RequestBody LogOutRequest logOutRequest) {
-        // Retrieve CustomUserDetails from the SecurityContext
-        CustomUserDetails customUserDetails;
-        try {
-            customUserDetails = (CustomUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        } catch (ClassCastException e) {
-            throw new InvalidTokenRequestException("JWT", "principal", "Invalid authentication principal");
-        }
-
-        // Call logout functionality in the service
+    public ResponseEntity<?> logoutUser(@CurrentUser CustomUserDetails customUserDetails,
+                                        @Valid @RequestBody LogOutRequest logOutRequest) {
+        // Call the service to perform logout actions
         userService.logoutUser(customUserDetails, logOutRequest);
 
-        // Publish logout success event
+        // Log the logout activity for tracking
+        userActivityService.logUserActivity(customUserDetails.getId(), "LOGOUT", "User logged out successfully");
+
+        // Publish a logout success event
         Object credentials = SecurityContextHolder.getContext().getAuthentication().getCredentials();
-        OnUserLogoutSuccessEvent logoutSuccessEvent = new OnUserLogoutSuccessEvent(
-                customUserDetails.getEmail(),
-                credentials.toString(),
-                logOutRequest
-        );
+        OnUserLogoutSuccessEvent logoutSuccessEvent = new OnUserLogoutSuccessEvent(customUserDetails.getEmail(),
+                credentials.toString(), logOutRequest);
         applicationEventPublisher.publishEvent(logoutSuccessEvent);
 
+        // Return a successful logout response
         return ResponseEntity.ok(new ApiResponse(true, "Log out successful"));
     }
 
-    
     
    
 

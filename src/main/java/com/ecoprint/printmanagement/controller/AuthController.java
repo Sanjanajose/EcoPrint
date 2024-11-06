@@ -35,6 +35,7 @@ import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
 import com.ecoprint.printmanagement.model.token.RefreshToken;
 import com.ecoprint.printmanagement.security.JwtTokenProvider;
 import com.ecoprint.printmanagement.service.AuthService;
+import com.ecoprint.printmanagement.service.UserActivityService;
 import com.ecoprint.printmanagement.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,6 +51,9 @@ public class AuthController {
     private final JwtTokenProvider tokenProvider;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final UserService userService; 
+    
+    @Autowired
+    private UserActivityService userActivityService;
 
     @Autowired
     public AuthController(AuthService authService, JwtTokenProvider tokenProvider, 
@@ -75,14 +79,21 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Logs the user in to the system and returns the auth tokens")
+    @Operation(summary = "Logs the user into the system and returns the auth tokens")
     public ResponseEntity<JwtAuthenticationResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+        // Authenticate the user
         Authentication authentication = authService.authenticateUser(loginRequest)
                 .orElseThrow(() -> new UserLoginException("Couldn't login user [" + loginRequest + "]"));
 
+        // Get custom user details
         CustomUserDetails customUserDetails = (CustomUserDetails) authentication.getPrincipal();
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
+        // Log the login activity
+        Long userId = customUserDetails.getId();
+        userActivityService.logUserActivity(userId, "LOGIN", "User logged in");
+
+        // Generate JWT token and refresh token
         return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
                 .map(RefreshToken::getToken)
                 .map(refreshToken -> {
@@ -92,20 +103,30 @@ public class AuthController {
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
 
+
     @PostMapping("/register")
     @Operation(summary = "Registers the user and publishes an event to generate the email verification")
     public ResponseEntity<ApiResponse> registerUser(@Valid @RequestBody RegistrationRequest registrationRequest) {
         return authService.registerUser(registrationRequest)
                 .map(user -> {
+                    // Log registration activity
+                    userActivityService.logUserActivity(user.getId(), "REGISTER", "User registered");
+
+                    // Prepare the URL for email verification
                     UriComponentsBuilder urlBuilder = ServletUriComponentsBuilder.fromCurrentContextPath()
                             .path("/api/auth/registrationConfirmation");
+
+                    // Publish registration completion event
                     OnUserRegistrationCompleteEvent onUserRegistrationCompleteEvent =
                             new OnUserRegistrationCompleteEvent(user, urlBuilder);
                     applicationEventPublisher.publishEvent(onUserRegistrationCompleteEvent);
+
+                    // Return success response
                     return ResponseEntity.ok(new ApiResponse(true, "User registered successfully. Check your email for verification."));
                 })
                 .orElseThrow(() -> new UserRegistrationException(registrationRequest.getEmail(), "Missing user object in database"));
     }
+
 
     @PostMapping("/password/resetlink")
     @Operation(summary = "Receive the reset link request and publish event to send mail containing the password reset link")
@@ -127,12 +148,20 @@ public class AuthController {
     public ResponseEntity<ApiResponse> resetPassword(@Valid @RequestBody PasswordResetRequest passwordResetRequest) {
         return authService.resetPassword(passwordResetRequest)
                 .map(changedUser -> {
-                    OnUserAccountChangeEvent onPasswordChangeEvent = new OnUserAccountChangeEvent(changedUser, "Reset Password", "Changed Successfully");
+                    // Log password reset activity
+                    userActivityService.logUserActivity(changedUser.getId(), "PASSWORD_RESET", "Password changed successfully");
+
+                    // Publish an account change event for password reset
+                    OnUserAccountChangeEvent onPasswordChangeEvent = new OnUserAccountChangeEvent(
+                            changedUser, "Reset Password", "Changed Successfully");
                     applicationEventPublisher.publishEvent(onPasswordChangeEvent);
+
+                    // Return success response
                     return ResponseEntity.ok(new ApiResponse(true, "Password changed successfully"));
                 })
                 .orElseThrow(() -> new PasswordResetException(passwordResetRequest.getToken(), "Error in resetting password"));
     }
+
 
     @GetMapping("/registrationConfirmation")
     @Operation(summary = "Confirms the email verification token that has been generated for the user during registration")

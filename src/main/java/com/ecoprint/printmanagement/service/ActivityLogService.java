@@ -3,6 +3,8 @@ package com.ecoprint.printmanagement.service;
 import com.ecoprint.printmanagement.model.ActivityLog;
 import com.ecoprint.printmanagement.repository.ActivityLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -18,36 +20,44 @@ public class ActivityLogService {
         this.activityLogRepository = activityLogRepository;
     }
 
-    // Method to log a generic user action
-    public void logAction(String action, String username, Long userId, String description) {
+    // Unified logging method for all user actions
+    public void logActivity(String action, String username, Long userId, String description) {
         ActivityLog log = new ActivityLog(
             action,
             username,
             LocalDateTime.now(),
             description,
             userId,
-            "User action: " + description
+            action + " action: " + description
         );
-        activityLogRepository.save(log);  // Persist log to the database
+        activityLogRepository.save(log);
         System.out.println("Action logged: " + action + " by " + username);
     }
 
-    // Method to log changes in user roles
-    public void logRoleChange(Long userId, String roleNames, String action) {
-        ActivityLog log = new ActivityLog(
-            action,
-            "System Admin",  // Replace with the actual username of the Admin/Super Admin
-            LocalDateTime.now(),
-            "Assigned roles: " + roleNames + " to user with ID: " + userId,
-            userId,
-            "Role change action"
-        );
-        activityLogRepository.save(log);  // Persist log to the database
+    // Dedicated method to log role changes
+    public void logRoleChange(Long userId, String roles, String action) {
+        String description = "Roles: " + roles + " were " + action + " for user with ID: " + userId;
+        logActivity(action, "System Admin", userId, description);  // Log as "System Admin" or actual admin's username
         System.out.println("Role change logged: " + action + " for User ID: " + userId);
     }
 
-    // Method to fetch all activity logs
+    // Fetch all activity logs
     public List<ActivityLog> getAllLogs() {
         return activityLogRepository.findAll();
+    }
+
+    // Paginated activity logs by user
+    public Page<ActivityLog> getActivitiesByUser(Long userId, Pageable pageable) {
+        return activityLogRepository.findByUserId(userId, pageable);
+    }
+
+    // Activity logs within a specified time range
+    public List<ActivityLog> getActivitiesWithinTimeRange(LocalDateTime start, LocalDateTime end) {
+        return activityLogRepository.findByTimestampBetween(start, end);
+    }
+
+    // Specific metric for total print jobs handled by a user
+    public long getTotalPrintJobsHandled(Long userId) {
+        return activityLogRepository.countByUserIdAndAction(userId, "PRINT_JOB");
     }
 }
