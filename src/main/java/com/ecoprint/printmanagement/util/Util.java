@@ -13,9 +13,12 @@
  */
 package com.ecoprint.printmanagement.util;
 
+import java.security.SecureRandom;
 import java.util.UUID;
 
 public class Util {
+	
+	private static final SecureRandom random = new SecureRandom();
 
     private Util() {
         throw new UnsupportedOperationException("Cannot instantiate a Util class");
@@ -23,5 +26,12 @@ public class Util {
 
     public static String generateRandomUuid() {
         return UUID.randomUUID().toString();
+    }
+    
+    
+ // Generates a 6-digit OTP for 2FA
+    public static String generateOTP() {
+        int otp = 100000 + random.nextInt(900000);
+        return String.valueOf(otp);
     }
 }
