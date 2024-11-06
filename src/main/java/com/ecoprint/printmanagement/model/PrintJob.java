@@ -2,6 +2,7 @@ package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDateTime;
 
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -9,6 +10,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 
 
 @Entity
@@ -47,7 +50,14 @@ public class PrintJob {
     @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = false)
     private byte[] fileData;  // Field to store the file content
 
-    
+    @NotNull(message = "Pages printed is mandatory")
+    @Min(value = 1, message = "Pages printed must be at least 1")
+    @Column(name="pages_printed", nullable = false)
+    private int pagesPrinted;
+
+    @Column(name="cost",nullable = false)
+    private double cost;
+
     
     // Getters and Setters
 
@@ -113,6 +123,22 @@ public class PrintJob {
 
 	public void setDescription(String description) {
 		this.description = description;
+	}
+
+	public int getPagesPrinted() {
+		return pagesPrinted;
+	}
+
+	public void setPagesPrinted(int pagesPrinted) {
+		this.pagesPrinted = pagesPrinted;
+	}
+
+	public double getCost() {
+		return cost;
+	}
+
+	public void setCost(double cost) {
+		this.cost = cost;
 	}
 
    

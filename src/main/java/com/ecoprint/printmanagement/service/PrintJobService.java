@@ -25,7 +25,7 @@ public class PrintJobService {
         this.printJobRepository = printJobRepository;
     }
 
-    public void uploadFile(MultipartFile file, String userName,String description) throws IOException {
+    public void uploadFile(MultipartFile file, String userName,String description,int pagesPrinted,double cost) throws IOException {
         // Validate file size
         if (file.isEmpty()) {
             throw new IllegalArgumentException("File is empty");
@@ -48,9 +48,11 @@ public class PrintJobService {
         printJob.setFileSize(file.getSize());
         printJob.setUserName(userName);
         printJob.setUploadTimestamp(LocalDateTime.now());
-        printJob.setFileData(fileData);  // Set the file data for database storage
-        printJob.setDescription(description);  // Set the description
-
+        printJob.setFileData(fileData);  
+        printJob.setDescription(description);  
+        printJob.setPagesPrinted(pagesPrinted);
+        printJob.setCost(cost);
+        
 
         // Save the PrintJob entity to the database
         printJobRepository.save(printJob);
@@ -91,6 +93,7 @@ public class PrintJobService {
         return printJobRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("File not found with id: " + id));
     }
+
 
    
 }

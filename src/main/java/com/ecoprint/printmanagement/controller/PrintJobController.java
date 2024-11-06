@@ -22,12 +22,16 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.service.PrintJobService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 @RestController
 @RequestMapping("/api/print-jobs")
 
 public class PrintJobController {
 	
     private static final Logger logger = LoggerFactory.getLogger(PrintJobController.class);
+    private static final double COST_PER_PAGE = 0.50; // Define your cost per page rate here
+
 
 		
     @Autowired
@@ -35,12 +39,19 @@ public class PrintJobController {
     
     @PostMapping("/upload")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    @Operation(
+    	    summary = "Upload a print job file",
+    	    description = "Allows a user to upload a file for a print job, calculates the cost based on pages printed."
+    	)
     public ResponseEntity<String> uploadPrintJob(
             @RequestParam(value = "file", required = true) MultipartFile file,
             @RequestParam(value = "userName", required = true) String userName,
-            @RequestParam(value = "description", required = false) String description) {
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted) {
         try {
-            printJobService.uploadFile(file, userName,description);
+            double cost = pagesPrinted * COST_PER_PAGE;
+
+            printJobService.uploadFile(file, userName,description,pagesPrinted, cost);
             return ResponseEntity.status(HttpStatus.CREATED).body("File uploaded successfully");
         } catch (IOException e) {
             logger.error("IOException during file upload", e);
@@ -55,9 +66,9 @@ public class PrintJobController {
     }
   
     
-    // New download endpoint
+    // This endpoint is tempory purpose
     @GetMapping("/download/{id}")
-    public ResponseEntity<Resource> downloadFile(@PathVariable Long id) {
+   public ResponseEntity<Resource> downloadFile(@PathVariable Long id) {
         try {
             Resource resource = printJobService.downloadFile(id);
             PrintJob printJob = printJobService.findPrintJobById(id);
@@ -70,7 +81,13 @@ public class PrintJobController {
             return ResponseEntity.notFound().build();
         }
     }
-
+    
+    
+    
+    
+    
+    
+ 
         
        
 
