@@ -44,6 +44,7 @@ import com.ecoprint.printmanagement.model.payload.TokenRefreshRequest;
 import com.ecoprint.printmanagement.model.payload.UpdatePasswordRequest;
 import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
 import com.ecoprint.printmanagement.model.token.RefreshToken;
+import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.security.JwtTokenProvider;
 import com.ecoprint.printmanagement.service.ActivityLogService;
 
@@ -65,6 +66,8 @@ public class AuthService {
     private final MailService mailService;
     private final ActivityLogService activityLogService;
     
+    @Autowired
+    UserRepository userRepository;
 
     @Autowired
     public AuthService(UserService userService, JwtTokenProvider tokenProvider,
@@ -112,6 +115,25 @@ public class AuthService {
     
     
     
+    /**
+     * Validates user credentials and returns user if valid.
+     *
+     * @param username The username of the user.
+     * @param password The password of the user.
+     * @return User if credentials are valid; null otherwise.
+     */
+    public User validateUserCredentials(String username, String password) {
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            if (passwordEncoder.matches(password, user.getPassword())) {
+                return user;
+            }
+        }
+        
+        return null; // Invalid credentials
+    }
 
 
 
