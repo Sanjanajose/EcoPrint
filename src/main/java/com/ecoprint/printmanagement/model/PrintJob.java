@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
 
@@ -26,7 +27,7 @@ public class PrintJob {
     public PrintJob() {
 		
 	}
-
+    @NotNull(message = "File cannot be null.")
 	@Column(name = "file_name", nullable = false) // Customize column name and make it non-nullable
     private String fileName;
 
@@ -36,6 +37,7 @@ public class PrintJob {
     @Column(name = "file_size", nullable = false)
     private long fileSize;
 
+    @NotEmpty(message = "User name is required.")
     @Column(name = "user_name", nullable = false)
     private String userName;
 
