@@ -52,7 +52,7 @@ public class CustomUserDetails extends User implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return super.getActive(); // Assuming that 'active' means the account is not locked
+        return super.isActive(); // Assuming that 'active' means the account is not locked
     }
 
     @Override

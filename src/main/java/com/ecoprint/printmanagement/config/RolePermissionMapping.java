@@ -20,19 +20,23 @@ public class RolePermissionMapping {
                 Permission.MANAGE_TECH_TASKS,
                 Permission.VIEW_TECH_INFO,
                 Permission.MANAGE_ROLES,
-                Permission.ACCESS_PUBLIC_DATA));
+                Permission.ACCESS_PUBLIC_DATA,
+                Permission.LOGIN));
 
         rolePermissions.put(RoleName.ROLE_TECHNICIAN, EnumSet.of(
                 Permission.VIEW_DASHBOARD,
                 Permission.MANAGE_TECH_TASKS,
-                Permission.VIEW_TECH_INFO));
+                Permission.VIEW_TECH_INFO,
+                Permission.LOGIN));
 
         rolePermissions.put(RoleName.ROLE_USER, EnumSet.of(
                 Permission.VIEW_DASHBOARD,
-                Permission.ACCESS_PUBLIC_DATA));
+                Permission.ACCESS_PUBLIC_DATA,
+                Permission.LOGIN));
 
         rolePermissions.put(RoleName.ROLE_GUESTUSER, EnumSet.of(
-                Permission.ACCESS_PUBLIC_DATA));
+                Permission.ACCESS_PUBLIC_DATA,
+                Permission.LOGIN));
     }
 
 }

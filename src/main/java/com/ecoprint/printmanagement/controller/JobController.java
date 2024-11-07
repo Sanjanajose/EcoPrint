@@ -29,11 +29,11 @@ public class JobController {
                                           @RequestParam(required = false) String description) {
         try {
             // First, create the print job
-            PrintJob printJob = printJobService.uploadFile(file, userName, description);
+            PrintJob printJob = printJobService.uploadFile(file, userName, description);  // Now this returns a PrintJob
 
             // Then, create the job associated with the print job
             Job job = new Job();
-            job.setUser(printJob.getUser());  // Set the user from the print job
+            job.setUser(printJob.getUser());  // Set the user from the print job (make sure `PrintJob` has `getUser()` method)
             job.setStatus(JobStatus.SUBMITTED);  // Set initial status
             job.setSubmittedAt(LocalDateTime.now());  // Set submission timestamp
 

@@ -41,6 +41,10 @@ public class Job {
     @OneToMany(mappedBy = "job", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<JobHistory> history;
 
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JoinColumn(name = "print_job_id")
+    private PrintJob printJob;  // Link to PrintJob
+
     // Getters and Setters
 
     public Long getJobId() {
@@ -57,6 +61,7 @@ public class Job {
 
     public void setStatus(JobStatus status) {
         this.status = status;
+        updateTimestamps(status);
     }
 
     public User getUser() {
@@ -145,5 +150,49 @@ public class Job {
 
     public void setHistory(List<JobHistory> history) {
         this.history = history;
+    }
+
+    public PrintJob getPrintJob() {
+        return printJob;
+    }
+
+    public void setPrintJob(PrintJob printJob) {
+        this.printJob = printJob;
+    }
+
+    // Method to update timestamps based on status
+    private void updateTimestamps(JobStatus status) {
+        LocalDateTime now = LocalDateTime.now();
+        switch (status) {
+            case SUBMITTED:
+                this.submittedAt = now;
+                break;
+            case QUEUED:
+                this.queuedAt = now;
+                break;
+            case PAUSED:
+                this.pausedAt = now;
+                break;
+            case READY:
+                this.readyAt = now;
+                break;
+            case PRINTING:
+                this.printingAt = now;
+                break;
+            case COMPLETED:
+                this.completedAt = now;
+                break;
+            case FAILED:
+                this.failedAt = now;
+                break;
+            case DELETED:
+                this.deletedAt = now;
+                break;
+            case FAVORITE:
+                this.favoritedAt = now;
+                break;
+            default:
+                break;
+        }
     }
 }

@@ -19,6 +19,8 @@ public class PrintJob {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id") // Specifies the column name in the database
     private Long id;
+    
+    private User user;  // Assuming PrintJob has a User field
 
     public PrintJob() {
 		
@@ -44,7 +46,7 @@ public class PrintJob {
 
         
     @Lob
-    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = false)
+    @Column(name = "file_data", nullable = false)
     private byte[] fileData;  // Field to store the file content
 
     
@@ -115,6 +117,13 @@ public class PrintJob {
 		this.description = description;
 	}
 
-   
+	 
+	public User getUser() {
+	     return user;
+	}
+
+	public void setUser(User user) {
+	      this.user = user;
+	}
 
 }

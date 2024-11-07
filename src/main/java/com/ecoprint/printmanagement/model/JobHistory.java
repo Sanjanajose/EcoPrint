@@ -1,7 +1,16 @@
 package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDateTime;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
+
 
 @Entity
 public class JobHistory {
@@ -10,11 +19,11 @@ public class JobHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "job_id", nullable = false)
+    @ManyToOne
+    @JoinColumn(name = "job_id")
     private Job job;
 
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.STRING) // This tells JPA to persist the enum as a String
     private JobStatus status;
 
     private LocalDateTime timestamp;
@@ -22,11 +31,11 @@ public class JobHistory {
     // Default constructor
     public JobHistory() {}
 
-    // Constructor to initialize JobHistory
-    public JobHistory(Job job, JobStatus status) {
+    // Constructor with Job, JobStatus, and LocalDateTime
+    public JobHistory(Job job, JobStatus status, LocalDateTime timestamp) {
         this.job = job;
         this.status = status;
-        this.timestamp = LocalDateTime.now(); // Automatically set timestamp to current time
+        this.timestamp = timestamp;
     }
 
     // Getters and Setters
