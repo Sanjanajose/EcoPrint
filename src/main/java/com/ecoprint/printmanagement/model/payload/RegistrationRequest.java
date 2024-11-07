@@ -59,6 +59,12 @@ public class RegistrationRequest {
 
     @Schema(name = "Profile Picture", description = "URL of the profile picture")
     private String profilePicture;
+    
+    @Schema(name = "Two Factor Enabled", description = "Indicates if two-factor authentication is enabled")
+    private boolean twoFactorEnabled = false;
+
+    @Schema(name = "Preferred 2FA Method", description = "The preferred method for two-factor authentication")
+    private String preferred2FAMethod;
 
     // Constructors
     public RegistrationRequest(String username, String email, String password, Boolean registerAsAdmin,
@@ -158,4 +164,22 @@ public class RegistrationRequest {
     public void setProfilePicture(String profilePicture) {
         this.profilePicture = profilePicture;
     }
+
+	public boolean isTwoFactorEnabled() {
+		return twoFactorEnabled;
+	}
+
+	public void setTwoFactorEnabled(boolean twoFactorEnabled) {
+		this.twoFactorEnabled = twoFactorEnabled;
+	}
+
+	public String getPreferred2FAMethod() {
+		return preferred2FAMethod;
+	}
+
+	public void setPreferred2FAMethod(String preferred2faMethod) {
+		preferred2FAMethod = preferred2faMethod;
+	}
+    
+    
 }

@@ -1,7 +1,5 @@
 package com.ecoprint.printmanagement.model;
 
-import org.hibernate.annotations.NaturalId;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -16,7 +14,9 @@ import jakarta.validation.constraints.Pattern;
 @Table(name = "company_details")
 public class CompanyDetails {
 		
+    
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // Use IDENTITY or AUTO depending on your database
     @Column(name = "company_id", unique = true, nullable = false)
     private Long companyId;
 
