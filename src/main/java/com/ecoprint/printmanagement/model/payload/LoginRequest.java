@@ -16,6 +16,7 @@ package com.ecoprint.printmanagement.model.payload;
 import com.ecoprint.printmanagement.validation.annotation.NullOrNotBlank;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.Column;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
@@ -40,6 +41,12 @@ public class LoginRequest {
             "deviceInfo object")
     private DeviceInfo deviceInfo;
     
+    @Column(name = "otp", nullable = false)
+    private String otp;// Optional field for 2FA
+
+    
+    
+
     
     private boolean rememberMe;
 
@@ -95,4 +102,14 @@ public class LoginRequest {
     public void setRememberMe(boolean rememberMe) {
         this.rememberMe = rememberMe;
     }
+
+	public String getOtp() {
+		return otp;
+	}
+
+	public void setOtp(String otp) {
+		this.otp = otp;
+	}
+    
+    
 }

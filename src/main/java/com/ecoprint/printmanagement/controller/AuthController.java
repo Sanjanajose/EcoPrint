@@ -95,10 +95,10 @@ public class AuthController {
         return ResponseEntity.ok(new ApiResponse(true, usernameExists.toString()));
     }
 
-    @PostMapping("/login")
-    @Operation(summary = "Logs the user into the system and returns the auth tokens")
-    public ResponseEntity<JwtAuthenticationResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        // Authenticate the user
+    @PostMapping("/loginWith2fa")
+    @Operation(summary = "Logs the user into the system and returns the auth tokens, with optional two-factor authentication (2FA) if enabled.")
+    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+        // Step 1: Authenticate the user
         Authentication authentication = authService.authenticateUser(loginRequest)
                 .orElseThrow(() -> new UserLoginException("Couldn't login user [" + loginRequest + "]"));
 
@@ -110,7 +110,37 @@ public class AuthController {
         Long userId = customUserDetails.getId();
         userActivityService.logUserActivity(userId, "LOGIN", "User logged in");
 
-        // Generate JWT token and refresh token
+        // Fetch the user and check if 2FA is enabled
+       // User user = customUserDetails.getUser(); // Assuming you can access User from CustomUserDetails
+        User user = authService.validateUserCredentials(loginRequest.getUsername(), loginRequest.getPassword());
+
+        if (user.isTwoFactorEnabled()) {
+            // Step 2: Handle 2FA
+            if (loginRequest.getOtp() != null) {
+                // Validate the provided OTP
+                boolean isValidOtp = otpService.validateOTP(userId, loginRequest.getOtp());
+                if (isValidOtp) {
+                    // OTP is valid, proceed with generating tokens
+                    return generateTokens(authentication, loginRequest);
+                } else {
+                    // OTP is invalid or expired
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body("Invalid or expired OTP. Please try again.");
+                }
+            } else {
+                // Generate and send OTP if it’s not provided
+                String otp = otpService.generateAndSaveOTP(userId);
+                if ("email".equalsIgnoreCase(user.getPreferred2FAMethod())) {
+                    mailService.sendOTPEmail(user.getEmail(), otp);
+                } /* else if ("sms".equalsIgnoreCase(user.getPreferred2FAMethod())) {
+                    smsService.sendOTPSMS(user.getPhone(), otp);
+                } */
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("OTP sent. Please enter the OTP to complete login.");
+            }
+        }
+
+        // Step 3: If 2FA is not enabled, proceed with normal login flow
         return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
                 .map(RefreshToken::getToken)
                 .map(refreshToken -> {
@@ -119,50 +149,21 @@ public class AuthController {
                 })
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
+    
+    
 
-
-
-
-@PostMapping("/userLogin2fa")
-@Operation(summary = "User login with two-factor authentication (2FA)")
-public ResponseEntity<String> login(@RequestBody LoginRequest2FA request) {
-    //  Validate user credentials
-    User user = authService.validateUserCredentials(request.getUsername(), request.getPassword());
-
-    //  If credentials are valid and user exists
-    if (user != null) {
-
-        // Check if 2FA is enabled for this user
-        if (user.isTwoFactorEnabled()) {
-            // Check if OTP is already provided
-        	if (request.getOtp() != null) {
-                // Validate the provided OTP
-                boolean isValidOtp = otpService.validateOTP(user.getId(), request.getOtp());
-                if (isValidOtp) {
-                    return ResponseEntity.ok("Login successful with 2FA verification");
-                } else {
-                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                            .body("Invalid or expired OTP. Please try again.");
-                }
-            } else {
-                // Generate and send OTP if not provided
-                String otp = otpService.generateAndSaveOTP(user.getId());
-                if (user.getPreferred2FAMethod().equals("mail")) {
-                	mailService.sendOTPEmail(user.getEmail(), otp);
-                }/* else if (user.getPreferred2FAMethod().equals("sms")) {
-                	smsService.sendOTPSMS(user.getPhone(), otp);
-                }*/
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body("OTP sent. Please enter the OTP to complete login.");
-            }
-        }
-
-        return ResponseEntity.ok("Login successful");
+    // Helper method to generate JWT and refresh tokens
+    private ResponseEntity<JwtAuthenticationResponse> generateTokens(Authentication authentication, LoginRequest loginRequest) {
+        // Generate JWT token and refresh token
+        return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
+                .map(RefreshToken::getToken)
+                .map(refreshToken -> {
+                    String jwtToken = authService.generateToken((CustomUserDetails) authentication.getPrincipal());
+                    return ResponseEntity.ok(new JwtAuthenticationResponse(jwtToken, refreshToken, tokenProvider.getExpiryDuration()));
+                })
+                .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
 
-    // If credentials are invalid, respond with Unauthorized status
-    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid username or password");
-}
 
 
     @PostMapping("/register")
