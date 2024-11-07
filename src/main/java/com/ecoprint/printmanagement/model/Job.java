@@ -46,6 +46,17 @@ public class Job {
     private PrintJob printJob;  // Link to PrintJob
 
     // Getters and Setters
+    
+   
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
 
     public Long getJobId() {
         return jobId;
@@ -64,13 +75,7 @@ public class Job {
         updateTimestamps(status);
     }
 
-    public User getUser() {
-        return user;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
-    }
+   
 
     public LocalDateTime getSubmittedAt() {
         return submittedAt;
@@ -159,6 +164,8 @@ public class Job {
     public void setPrintJob(PrintJob printJob) {
         this.printJob = printJob;
     }
+    
+    
 
     // Method to update timestamps based on status
     private void updateTimestamps(JobStatus status) {

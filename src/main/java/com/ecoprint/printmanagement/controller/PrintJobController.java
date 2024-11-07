@@ -10,7 +10,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,7 +23,6 @@ import com.ecoprint.printmanagement.service.PrintJobService;
 
 @RestController
 @RequestMapping("/api/print-jobs")
-
 public class PrintJobController {
 	
     private static final Logger logger = LoggerFactory.getLogger(PrintJobController.class);
@@ -34,7 +32,6 @@ public class PrintJobController {
     private PrintJobService printJobService;
     
     @PostMapping("/upload")
-    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> uploadPrintJob(
             @RequestParam(value = "file", required = true) MultipartFile file,
             @RequestParam(value = "userName", required = true) String userName,
@@ -53,11 +50,9 @@ public class PrintJobController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error during file upload");
         }
     }
-    
-    
   
     
-    // New download endpoint
+    /*// New download endpoint
     @GetMapping("/download/{id}")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) {
         try {
@@ -72,7 +67,7 @@ public class PrintJobController {
             return ResponseEntity.notFound().build();
         }
     }
-
+*/
         
        
 
