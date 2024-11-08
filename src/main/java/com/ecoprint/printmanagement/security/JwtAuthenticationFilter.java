@@ -60,6 +60,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        // Bypass JWT filter for WebSocket handshake requests
+        if ("websocket".equalsIgnoreCase(request.getHeader("Upgrade"))) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         try {
             String jwt = getJwtFromRequest(request);
 
@@ -67,7 +73,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Long userId = jwtTokenProvider.getUserIdFromJWT(jwt);
                 UserDetails userDetails = customUserDetailsService.loadUserById(userId);
                 List<GrantedAuthority> authorities = jwtTokenProvider.getAuthoritiesFromJWT(jwt);
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, jwt, authorities);
+                UsernamePasswordAuthenticationToken authentication = 
+                    new UsernamePasswordAuthenticationToken(userDetails, jwt, authorities);
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }

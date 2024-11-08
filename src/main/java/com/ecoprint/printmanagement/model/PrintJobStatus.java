@@ -1,6 +1,6 @@
 package com.ecoprint.printmanagement.model;
 
-public enum JobStatus {
+public enum PrintJobStatus {
 	
 	SUBMITTED,
     QUEUED,

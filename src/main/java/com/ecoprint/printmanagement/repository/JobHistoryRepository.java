@@ -1,12 +1,11 @@
 package com.ecoprint.printmanagement.repository;
 
-import com.ecoprint.printmanagement.model.JobHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
+import com.ecoprint.printmanagement.model.JobHistory;
 
-@Repository
 public interface JobHistoryRepository extends JpaRepository<JobHistory, Long> {
-    List<JobHistory> findAllByJob_JobId(Long jobId);
+
+    // Method to find job history by print job ID, ordered by timestamp
+    List<JobHistory> findByPrintJobIdOrderByTimestampAsc(Long printJobId);
 }

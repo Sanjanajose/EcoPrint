@@ -95,6 +95,30 @@ public class AuthController {
         Boolean usernameExists = authService.usernameAlreadyExists(username);
         return ResponseEntity.ok(new ApiResponse(true, usernameExists.toString()));
     }
+    
+    @PostMapping("/register")
+    @Operation(summary = "Registers the user and publishes an event to generate the email verification")
+    public ResponseEntity<ApiResponse> registerUser(@Valid @RequestBody RegistrationRequest registrationRequest) {
+        return authService.registerUser(registrationRequest)
+                .map(user -> {
+                    // Log registration activity
+                    userActivityService.logUserActivity(user.getId(), "REGISTER", "User registered");
+
+                    // Prepare the URL for email verification
+                    UriComponentsBuilder urlBuilder = ServletUriComponentsBuilder.fromCurrentContextPath()
+                            .path("/api/auth/registrationConfirmation");
+
+                    // Publish registration completion event
+                    OnUserRegistrationCompleteEvent onUserRegistrationCompleteEvent =
+                            new OnUserRegistrationCompleteEvent(user, urlBuilder);
+                    applicationEventPublisher.publishEvent(onUserRegistrationCompleteEvent);
+
+                    // Return success response
+                    return ResponseEntity.ok(new ApiResponse(true, "User registered successfully. Check your email for verification."));
+                })
+                .orElseThrow(() -> new UserRegistrationException(registrationRequest.getEmail(), "Missing user object in database"));
+    }
+
 
     @PostMapping("/login")
     @Operation(summary = "Logs the user into the system and returns the auth tokens")

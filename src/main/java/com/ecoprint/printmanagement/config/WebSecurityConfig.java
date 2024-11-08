@@ -51,6 +51,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/swagger-resources/**").permitAll()
                         .requestMatchers("/swagger-resources").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/ws").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/admin/**").hasAuthority(Permission.MANAGE_USERS.name())  // Admin-only access
                         .requestMatchers("/tech/**").hasAuthority(Permission.MANAGE_TECH_TASKS.name())  // Technician access
