@@ -2,31 +2,38 @@ package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDateTime;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 
 @Entity
+@Table(name = "job_history")
 public class JobHistory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "job_id", nullable = false)
-    private Job job;
+    @NotNull
+    @Column(name = "print_job_id", nullable = false)
+    private Long printJobId;
 
     @Enumerated(EnumType.STRING)
-    private JobStatus status;
+    @Column(name = "status", nullable = false)
+    private PrintJobStatus status;
 
+    @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
 
-    // Default constructor
+    @Column(name = "comments")
+    private String comments;
+
+    // Constructors
     public JobHistory() {}
 
-    // Constructor to initialize JobHistory
-    public JobHistory(Job job, JobStatus status) {
-        this.job = job;
+    public JobHistory(Long printJobId, PrintJobStatus status, LocalDateTime timestamp, String comments) {
+        this.printJobId = printJobId;
         this.status = status;
-        this.timestamp = LocalDateTime.now(); // Automatically set timestamp to current time
+        this.timestamp = timestamp;
+        this.comments = comments;
     }
 
     // Getters and Setters
@@ -38,19 +45,19 @@ public class JobHistory {
         this.id = id;
     }
 
-    public Job getJob() {
-        return job;
+    public Long getPrintJobId() {
+        return printJobId;
     }
 
-    public void setJob(Job job) {
-        this.job = job;
+    public void setPrintJobId(Long printJobId) {
+        this.printJobId = printJobId;
     }
 
-    public JobStatus getStatus() {
+    public PrintJobStatus getStatus() {
         return status;
     }
 
-    public void setStatus(JobStatus status) {
+    public void setStatus(PrintJobStatus status) {
         this.status = status;
     }
 
@@ -60,5 +67,13 @@ public class JobHistory {
 
     public void setTimestamp(LocalDateTime timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getComments() {
+        return comments;
+    }
+
+    public void setComments(String comments) {
+        this.comments = comments;
     }
 }

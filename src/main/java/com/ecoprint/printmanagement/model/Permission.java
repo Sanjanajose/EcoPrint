@@ -6,5 +6,6 @@ public enum Permission {
     MANAGE_TECH_TASKS,
     VIEW_TECH_INFO,
     ACCESS_PUBLIC_DATA,
-    MANAGE_ROLES
+    MANAGE_ROLES, 
+    LOGIN
 }

@@ -156,7 +156,7 @@ public class User extends DateAudit {
         country = user.getCountry();
         dob = user.getDob();
         profilePicture = user.getProfilePicture();
-        active = user.getActive();
+        active = user.isActive();
         roles = new HashSet<>(user.getRoles());
         permissions = new HashSet<>(user.getPermissions());
         isEmailVerified = user.getEmailVerified();
@@ -280,7 +280,7 @@ public class User extends DateAudit {
         this.email = email;
     }
 
-    public Boolean getActive() {
+    public Boolean isActive() {
         return active;
     }
 
@@ -352,4 +352,6 @@ public class User extends DateAudit {
                 ", isEmailVerified=" + isEmailVerified +
                 '}';
     }
+    
+ 
 }

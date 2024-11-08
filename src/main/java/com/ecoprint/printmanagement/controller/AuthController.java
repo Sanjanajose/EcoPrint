@@ -42,6 +42,8 @@ import com.ecoprint.printmanagement.exception.TokenRefreshException;
 import com.ecoprint.printmanagement.exception.UserLoginException;
 import com.ecoprint.printmanagement.exception.UserRegistrationException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+import com.ecoprint.printmanagement.model.LoginRequest2FA;
+import com.ecoprint.printmanagement.model.Permission;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
 import com.ecoprint.printmanagement.model.payload.JwtAuthenticationResponse;
@@ -107,6 +109,30 @@ public class AuthController {
         Boolean usernameExists = authService.usernameAlreadyExists(username);
         return ResponseEntity.ok(new ApiResponse(true, usernameExists.toString()));
     }
+    
+    @PostMapping("/register")
+    @Operation(summary = "Registers the user and publishes an event to generate the email verification")
+    public ResponseEntity<ApiResponse> registerUser(@Valid @RequestBody RegistrationRequest registrationRequest) {
+        return authService.registerUser(registrationRequest)
+                .map(user -> {
+                    // Log registration activity
+                    userActivityService.logUserActivity(user.getId(), "REGISTER", "User registered");
+
+                    // Prepare the URL for email verification
+                    UriComponentsBuilder urlBuilder = ServletUriComponentsBuilder.fromCurrentContextPath()
+                            .path("/api/auth/registrationConfirmation");
+
+                    // Publish registration completion event
+                    OnUserRegistrationCompleteEvent onUserRegistrationCompleteEvent =
+                            new OnUserRegistrationCompleteEvent(user, urlBuilder);
+                    applicationEventPublisher.publishEvent(onUserRegistrationCompleteEvent);
+
+                    // Return success response
+                    return ResponseEntity.ok(new ApiResponse(true, "User registered successfully. Check your email for verification."));
+                })
+                .orElseThrow(() -> new UserRegistrationException(registrationRequest.getEmail(), "Missing user object in database"));
+    }
+
 
     @PostMapping("/login")
     @Operation(summary = "Logs the user into the system and returns the auth tokens, with optional two-factor authentication (2FA) if enabled.")
@@ -179,6 +205,7 @@ public class AuthController {
 
 
 
+
     @PostMapping("/register")
     @Operation(summary = "Registers the user and publishes an event to generate the email verification")
     public ResponseEntity<ApiResponse> registerUser(@Valid @RequestBody RegistrationRequest registrationRequest) {
@@ -202,6 +229,12 @@ public class AuthController {
                 .orElseThrow(() -> new UserRegistrationException(registrationRequest.getEmail(), "Missing user object in database"));
     }
 
+
+    // If credentials are invalid, respond with Unauthorized status
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid username or password");
+} 
+    
+    
 
     @PostMapping("/password/resetlink")
     @Operation(summary = "Receive the reset link request and publish event to send mail containing the password reset link")
