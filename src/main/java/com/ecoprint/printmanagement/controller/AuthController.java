@@ -14,36 +14,49 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.util.Optional;
-import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.data.repository.query.Param;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.ecoprint.printmanagement.event.*;
-import com.ecoprint.printmanagement.exception.*;
+import com.ecoprint.printmanagement.event.OnGenerateResetLinkEvent;
+import com.ecoprint.printmanagement.event.OnRegenerateEmailVerificationEvent;
+import com.ecoprint.printmanagement.event.OnUserAccountChangeEvent;
+import com.ecoprint.printmanagement.event.OnUserRegistrationCompleteEvent;
+import com.ecoprint.printmanagement.exception.InvalidTokenRequestException;
+import com.ecoprint.printmanagement.exception.PasswordResetException;
+import com.ecoprint.printmanagement.exception.PasswordResetLinkException;
+import com.ecoprint.printmanagement.exception.TokenRefreshException;
+import com.ecoprint.printmanagement.exception.UserLoginException;
+import com.ecoprint.printmanagement.exception.UserRegistrationException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
-import com.ecoprint.printmanagement.model.LoginRequest2FA;
 import com.ecoprint.printmanagement.model.User;
-import com.ecoprint.printmanagement.model.payload.*;
+import com.ecoprint.printmanagement.model.payload.ApiResponse;
+import com.ecoprint.printmanagement.model.payload.JwtAuthenticationResponse;
+import com.ecoprint.printmanagement.model.payload.LoginRequest;
+import com.ecoprint.printmanagement.model.payload.PasswordResetLinkRequest;
+import com.ecoprint.printmanagement.model.payload.PasswordResetRequest;
+import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
+import com.ecoprint.printmanagement.model.payload.TokenRefreshRequest;
 import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
 import com.ecoprint.printmanagement.model.token.RefreshToken;
 import com.ecoprint.printmanagement.security.JwtTokenProvider;
 import com.ecoprint.printmanagement.service.AuthService;
-
-import com.ecoprint.printmanagement.service.UserActivityService;
-
 import com.ecoprint.printmanagement.service.MailService;
 import com.ecoprint.printmanagement.service.OTPService;
-
+import com.ecoprint.printmanagement.service.UserActivityService;
 import com.ecoprint.printmanagement.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -95,7 +108,7 @@ public class AuthController {
         return ResponseEntity.ok(new ApiResponse(true, usernameExists.toString()));
     }
 
-    @PostMapping("/loginWith2fa")
+    @PostMapping("/login")
     @Operation(summary = "Logs the user into the system and returns the auth tokens, with optional two-factor authentication (2FA) if enabled.")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         // Step 1: Authenticate the user
