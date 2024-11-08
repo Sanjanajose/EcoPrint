@@ -132,7 +132,8 @@ public class UserService {
         newUser.setCountry(registerRequest.getCountry());
         newUser.setDob(registerRequest.getDob());
         newUser.setProfilePicture(registerRequest.getProfilePicture());
-
+        newUser.setTwoFactorEnabled(registerRequest.isTwoFactorEnabled());
+        newUser.setPreferred2FAMethod(registerRequest.getPreferred2FAMethod());
         // Save the user to the repository
         User savedUser = userRepository.save(newUser);
 

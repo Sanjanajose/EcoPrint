@@ -14,37 +14,51 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.util.Optional;
-import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.data.repository.query.Param;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.ecoprint.printmanagement.event.*;
-import com.ecoprint.printmanagement.exception.*;
+import com.ecoprint.printmanagement.event.OnGenerateResetLinkEvent;
+import com.ecoprint.printmanagement.event.OnRegenerateEmailVerificationEvent;
+import com.ecoprint.printmanagement.event.OnUserAccountChangeEvent;
+import com.ecoprint.printmanagement.event.OnUserRegistrationCompleteEvent;
+import com.ecoprint.printmanagement.exception.InvalidTokenRequestException;
+import com.ecoprint.printmanagement.exception.PasswordResetException;
+import com.ecoprint.printmanagement.exception.PasswordResetLinkException;
+import com.ecoprint.printmanagement.exception.TokenRefreshException;
+import com.ecoprint.printmanagement.exception.UserLoginException;
+import com.ecoprint.printmanagement.exception.UserRegistrationException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.LoginRequest2FA;
 import com.ecoprint.printmanagement.model.Permission;
 import com.ecoprint.printmanagement.model.User;
-import com.ecoprint.printmanagement.model.payload.*;
+import com.ecoprint.printmanagement.model.payload.ApiResponse;
+import com.ecoprint.printmanagement.model.payload.JwtAuthenticationResponse;
+import com.ecoprint.printmanagement.model.payload.LoginRequest;
+import com.ecoprint.printmanagement.model.payload.PasswordResetLinkRequest;
+import com.ecoprint.printmanagement.model.payload.PasswordResetRequest;
+import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
+import com.ecoprint.printmanagement.model.payload.TokenRefreshRequest;
 import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
 import com.ecoprint.printmanagement.model.token.RefreshToken;
 import com.ecoprint.printmanagement.security.JwtTokenProvider;
 import com.ecoprint.printmanagement.service.AuthService;
-
-import com.ecoprint.printmanagement.service.UserActivityService;
-
 import com.ecoprint.printmanagement.service.MailService;
 import com.ecoprint.printmanagement.service.OTPService;
-
+import com.ecoprint.printmanagement.service.UserActivityService;
 import com.ecoprint.printmanagement.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -121,9 +135,9 @@ public class AuthController {
 
 
     @PostMapping("/login")
-    @Operation(summary = "Logs the user into the system and returns the auth tokens")
-    public ResponseEntity<JwtAuthenticationResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        // Authenticate the user
+    @Operation(summary = "Logs the user into the system and returns the auth tokens, with optional two-factor authentication (2FA) if enabled.")
+    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+        // Step 1: Authenticate the user
         Authentication authentication = authService.authenticateUser(loginRequest)
                 .orElseThrow(() -> new UserLoginException("Couldn't login user [" + loginRequest + "]"));
 
@@ -135,7 +149,37 @@ public class AuthController {
         Long userId = customUserDetails.getId();
         userActivityService.logUserActivity(userId, "LOGIN", "User logged in");
 
-        // Generate JWT token and refresh token
+        // Fetch the user and check if 2FA is enabled
+       // User user = customUserDetails.getUser(); // Assuming you can access User from CustomUserDetails
+        User user = authService.validateUserCredentials(loginRequest.getUsername(), loginRequest.getPassword());
+
+        if (user.isTwoFactorEnabled()) {
+            // Step 2: Handle 2FA
+            if (loginRequest.getOtp() != null) {
+                // Validate the provided OTP
+                boolean isValidOtp = otpService.validateOTP(userId, loginRequest.getOtp());
+                if (isValidOtp) {
+                    // OTP is valid, proceed with generating tokens
+                    return generateTokens(authentication, loginRequest);
+                } else {
+                    // OTP is invalid or expired
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body("Invalid or expired OTP. Please try again.");
+                }
+            } else {
+                // Generate and send OTP if it’s not provided
+                String otp = otpService.generateAndSaveOTP(userId);
+                if ("email".equalsIgnoreCase(user.getPreferred2FAMethod())) {
+                    mailService.sendOTPEmail(user.getEmail(), otp);
+                } /* else if ("sms".equalsIgnoreCase(user.getPreferred2FAMethod())) {
+                    smsService.sendOTPSMS(user.getPhone(), otp);
+                } */
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("OTP sent. Please enter the OTP to complete login.");
+            }
+        }
+
+        // Step 3: If 2FA is not enabled, proceed with normal login flow
         return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
                 .map(RefreshToken::getToken)
                 .map(refreshToken -> {
@@ -144,52 +188,54 @@ public class AuthController {
                 })
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
+    
+    
 
-
-
-
-@PostMapping("/userLogin2fa")
-@Operation(summary = "User login with two-factor authentication (2FA)")
-public ResponseEntity<String> login(@RequestBody LoginRequest2FA request) {
-    //  Validate user credentials
-    User user = authService.validateUserCredentials(request.getUsername(), request.getPassword());
-
-    //  If credentials are valid and user exists
-    if (user != null) {
-
-        // Check if 2FA is enabled for this user
-        if (user.isTwoFactorEnabled()) {
-            // Check if OTP is already provided
-        	if (request.getOtp() != null) {
-                // Validate the provided OTP
-                boolean isValidOtp = otpService.validateOTP(user.getId(), request.getOtp());
-                if (isValidOtp) {
-                    return ResponseEntity.ok("Login successful with 2FA verification");
-                } else {
-                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                            .body("Invalid or expired OTP. Please try again.");
-                }
-            } else {
-                // Generate and send OTP if not provided
-                String otp = otpService.generateAndSaveOTP(user.getId());
-                if (user.getPreferred2FAMethod().equals("mail")) {
-                	mailService.sendOTPEmail(user.getEmail(), otp);
-                }/* else if (user.getPreferred2FAMethod().equals("sms")) {
-                	smsService.sendOTPSMS(user.getPhone(), otp);
-                }*/
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body("OTP sent. Please enter the OTP to complete login.");
-            }
-        }
-
-        return ResponseEntity.ok("Login successful");
+    // Helper method to generate JWT and refresh tokens
+    private ResponseEntity<JwtAuthenticationResponse> generateTokens(Authentication authentication, LoginRequest loginRequest) {
+        // Generate JWT token and refresh token
+        return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
+                .map(RefreshToken::getToken)
+                .map(refreshToken -> {
+                    String jwtToken = authService.generateToken((CustomUserDetails) authentication.getPrincipal());
+                    return ResponseEntity.ok(new JwtAuthenticationResponse(jwtToken, refreshToken, tokenProvider.getExpiryDuration()));
+                })
+                .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
+
+
+
+
+    @PostMapping("/register")
+    @Operation(summary = "Registers the user and publishes an event to generate the email verification")
+    public ResponseEntity<ApiResponse> registerUser(@Valid @RequestBody RegistrationRequest registrationRequest) {
+        return authService.registerUser(registrationRequest)
+                .map(user -> {
+                    // Log registration activity
+                    userActivityService.logUserActivity(user.getId(), "REGISTER", "User registered");
+
+                    // Prepare the URL for email verification
+                    UriComponentsBuilder urlBuilder = ServletUriComponentsBuilder.fromCurrentContextPath()
+                            .path("/api/auth/registrationConfirmation");
+
+                    // Publish registration completion event
+                    OnUserRegistrationCompleteEvent onUserRegistrationCompleteEvent =
+                            new OnUserRegistrationCompleteEvent(user, urlBuilder);
+                    applicationEventPublisher.publishEvent(onUserRegistrationCompleteEvent);
+
+                    // Return success response
+                    return ResponseEntity.ok(new ApiResponse(true, "User registered successfully. Check your email for verification."));
+                })
+                .orElseThrow(() -> new UserRegistrationException(registrationRequest.getEmail(), "Missing user object in database"));
+    }
+
 
     // If credentials are invalid, respond with Unauthorized status
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid username or password");
 } 
     
     
+
     @PostMapping("/password/resetlink")
     @Operation(summary = "Receive the reset link request and publish event to send mail containing the password reset link")
     public ResponseEntity<ApiResponse> resetLink(@Valid @RequestBody PasswordResetLinkRequest passwordResetLinkRequest) {
