@@ -14,31 +14,48 @@
 package com.ecoprint.printmanagement.service;
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.ecoprint.printmanagement.config.RolePermissionMapping;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+import com.ecoprint.printmanagement.model.CompanyDetails;
 import com.ecoprint.printmanagement.model.Permission;
 import com.ecoprint.printmanagement.model.Role;
+import com.ecoprint.printmanagement.model.RoleChangeLog;
 import com.ecoprint.printmanagement.model.RoleName;
+import com.ecoprint.printmanagement.model.User;
+import com.ecoprint.printmanagement.repository.CompanyAccountRepository;
+import com.ecoprint.printmanagement.repository.RoleChangeLogRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
+import com.ecoprint.printmanagement.repository.UserRepository;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 
 @Service
 public class RoleService {
 
     private final RoleRepository roleRepository;
+    private final UserRepository userRepository;
+    private final CompanyAccountRepository companyRepository;
+    private final RoleChangeLogRepository roleChangeLogRepository;
+
+
 
     @Autowired
-    public RoleService(RoleRepository roleRepository) {
+    public RoleService(UserRepository userRepository,RoleRepository roleRepository,CompanyAccountRepository companyRepository,RoleChangeLogRepository roleChangeLogRepository) {
+        this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.companyRepository=companyRepository;
+        this.roleChangeLogRepository=roleChangeLogRepository;
     }
 
     /**
@@ -148,4 +165,85 @@ public class RoleService {
         Role role = getRoleByName(roleName);
         return role.getPermissions();
     }
+    
+    @Transactional
+    public void assignRole(Long userId, Long roleId, Long requestedById, Long companyId) {
+        User requestingUser = userRepository.findById(requestedById)
+                .orElseThrow(() -> new EntityNotFoundException("Requesting user not found with ID: " + requestedById));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found with ID: " + userId));
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found with ID: " + roleId));
+        CompanyDetails company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new EntityNotFoundException("Company not found with ID: " + companyId));
+        
+        Boolean isCompanyAdmin = userRepository.hasRole(requestedById, RoleName.ROLE_ADMIN)&&
+                requestingUser.getCompanyDetails() != null &&
+                requestingUser.getCompanyDetails().getCompanyId().equals(companyId);
+        
+        Boolean isSuperAdmin = userRepository.hasRole(requestedById, RoleName.ROLE_SUPERADMIN);
+
+
+
+        if (isSuperAdmin || isCompanyAdmin) {
+     
+            user.setCompanyDetails(company);
+            
+            // Clear existing roles for the user
+            user.getRoles().clear();
+            // Assign the new role
+            user.addRole(role);
+            userRepository.save(user);
+          //  logRoleChange(user, role, "ASSIGN", requestedById); // Implement logging for compliance
+       } else {
+            throw new AccessDeniedException("Only Super Admins or Company Admins can assign roles.");
+        }
+    }
+    
+    
+    
+    @Transactional
+    public void revokeRole(Long userId, Long roleId, Long requestedById, Long companyId) {
+        // Fetch the user, role, and company
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found with ID: " + userId));
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found with ID: " + roleId));
+        CompanyDetails company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new EntityNotFoundException("Company not found with ID: " + companyId));
+
+        // Check if the requesting user has permission to revoke the role
+        boolean isSuperAdmin = userRepository.hasRole(requestedById, RoleName.ROLE_SUPERADMIN);
+        boolean isCompanyAdmin = userRepository.hasRole(requestedById, RoleName.ROLE_ADMIN) &&
+                                 userRepository.findById(requestedById).get().getCompanyDetails().getCompanyId().equals(companyId);
+
+        if (isSuperAdmin || isCompanyAdmin) {
+            // If the user has the role, remove it
+            if (user.getRoles().contains(role)) {
+                user.getRoles().remove(role);
+                userRepository.save(user);
+
+                // Log the role revocation action for compliance
+               // logRoleChange(user, role, "REVOKE", requestedById);
+            } else {
+                throw new IllegalStateException("User does not have the specified role");
+            }
+        } else {
+            throw new AccessDeniedException("Only Super Admins or Company Admins can revoke roles.");
+        }
+    }
+
+    
+    private void logRoleChange(User user, Role role, String action, Long requestedById) {
+        // Log the role assignment or revocation action (e.g., save to a database table or external log service)
+        RoleChangeLog log = new RoleChangeLog();
+        log.setUserId(user.getId());
+        log.setRoleId(role.getId());
+        log.setAction(action);
+        log.setRequestedBy(requestedById);
+        log.setTimestamp(new Date());
+        roleChangeLogRepository.save(log);
+    }
+
+
 }

@@ -52,4 +52,30 @@ public class RoleController {
         Set<Permission> permissions = roleService.getPermissionsForRole(roleName);
         return ResponseEntity.ok(permissions);
     }
+    
+    @PreAuthorize("hasRole('ROLE_SUPERADMIN') or hasRole('ROLE_ADMIN')")
+    @PostMapping("/assignRole")
+     public ResponseEntity<?> assignRole(
+             @RequestParam Long companyId,
+             @RequestParam Long userId,
+             @RequestParam Long roleId,
+             @RequestHeader("X-Requested-By") Long requestedBy) {
+
+         roleService.assignRole(userId, roleId, requestedBy, companyId);
+         return ResponseEntity.ok("Role assigned successfully");
+     }
+
+    
+    @PreAuthorize("hasRole('ROLE_SUPERADMIN') or hasRole('ROLE_ADMIN')")
+    @DeleteMapping("/revokeRole")
+    public ResponseEntity<?> revokeRole(
+            @RequestParam Long companyId,
+            @RequestParam Long userId,
+            @RequestParam Long roleId,
+            @RequestHeader("X-Requested-By") Long requestedBy) {
+
+        roleService.revokeRole(userId, roleId, requestedBy, companyId);
+        return ResponseEntity.ok("Role revoked successfully");
+    }
+
 }
