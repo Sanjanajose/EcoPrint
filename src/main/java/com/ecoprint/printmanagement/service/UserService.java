@@ -148,7 +148,7 @@ public class UserService {
             throw new IllegalArgumentException("Password must be at least 8 characters long, contain a number, and a special character.");
         }
     }
-
+/*
     public User deleteUserRole(Long userId, String roleName, Authentication authentication) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
@@ -175,7 +175,7 @@ public class UserService {
 
         return userRepository.save(user);
     }
-
+*/
 
     private Set<Role> getRolesForNewUser(Boolean isAdmin) {
         Set<Role> roles = new HashSet<>();
@@ -233,7 +233,7 @@ public class UserService {
 
         return savedUser;
     }
-
+/*
     public User assignRolesToUser(Long userId, Set<String> roleNames) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
@@ -257,7 +257,7 @@ public class UserService {
 
         return user;
     }
-
+*/
 
 
     private boolean currentUserHasPermissionToAssign(Authentication authentication, String roleName) {

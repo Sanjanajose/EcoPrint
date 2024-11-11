@@ -189,12 +189,11 @@ public class RoleService {
      
             user.setCompanyDetails(company);
             
-            // Clear existing roles for the user
-            user.getRoles().clear();
+
             // Assign the new role
             user.addRole(role);
             userRepository.save(user);
-          //  logRoleChange(user, role, "ASSIGN", requestedById); // Implement logging for compliance
+           logRoleChange(user, role, "ASSIGN", requestedById); // Implement logging for compliance
        } else {
             throw new AccessDeniedException("Only Super Admins or Company Admins can assign roles.");
         }
@@ -224,7 +223,7 @@ public class RoleService {
                 userRepository.save(user);
 
                 // Log the role revocation action for compliance
-               // logRoleChange(user, role, "REVOKE", requestedById);
+               logRoleChange(user, role, "REVOKE", requestedById);
             } else {
                 throw new IllegalStateException("User does not have the specified role");
             }
