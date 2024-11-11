@@ -19,8 +19,13 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
+import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
+@Repository
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -50,6 +55,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Find users by profile picture URL
     List<User> findByProfilePicture(String profilePicture);
+    
+    boolean existsById(Long userId);
+    
+    
+    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN TRUE ELSE FALSE END " +
+    	       "FROM USER u JOIN u.roles r " +
+    	       "WHERE u.id = :userId AND r.role = :roleName")
+    	Boolean hasRole(@Param("userId") Long userId, @Param("roleName") RoleName roleName);
+
 
 
 }
