@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +27,14 @@ import com.ecoprint.printmanagement.model.JobStatusMessage;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.service.PrintJobService;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/print-jobs")
@@ -185,6 +192,34 @@ public class PrintJobController {
         // Retrieve all jobs with QUEUED status, ordered by priority
         List<PrintJob> queuedJobs = printJobRepository.findByStatusOrderByPriorityAsc(PrintJobStatus.QUEUED);
         return ResponseEntity.ok(queuedJobs);
+    }
+    
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Operation(summary = "Export Print Job Logs to Excel", description = "Exports the print job logs to an Excel file for admins.")
+    @GetMapping("/export/excel")
+    public void exportLogsToExcel(HttpServletResponse response) throws IOException {
+        response.setContentType("application/vnd.ms-excel");
+        response.setHeader("Content-Disposition", "attachment; file=print_job_logs.xlsx");
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Logs");
+
+        Row headerRow = sheet.createRow(0);
+        headerRow.createCell(0).setCellValue("Job ID");
+        headerRow.createCell(1).setCellValue("Status");
+        headerRow.createCell(2).setCellValue("Timestamp");
+
+        int rowIdx = 1;
+        List<JobHistory> jobHistory = printJobService.getAllLogs();
+
+        for (JobHistory log : jobHistory) {
+            Row row = sheet.createRow(rowIdx++);
+            row.createCell(0).setCellValue(log.getPrintJobId());
+            row.createCell(1).setCellValue(log.getStatus().toString());
+            row.createCell(2).setCellValue(log.getTimestamp().toString());
+        }
+
+        workbook.write(response.getOutputStream());
+        workbook.close();
     }
 
 }

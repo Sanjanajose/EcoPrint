@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.tika.Tika;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.model.JobHistory;
@@ -19,6 +21,8 @@ import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
+
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class PrintJobService {
@@ -38,6 +42,7 @@ public class PrintJobService {
     }
 
     // Method to upload file and create a new job
+    @Transactional
     public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
@@ -62,6 +67,7 @@ public class PrintJobService {
         printJob.setCost(cost);
         printJob.setStatus(PrintJobStatus.SUBMITTED);
         printJob.setSubmittedAt(LocalDateTime.now());
+
 
         printJobRepository.save(printJob);
         
@@ -170,8 +176,7 @@ public class PrintJobService {
         history.setStatus(status);
         history.setComments(actionDescription);
         history.setTimestamp(LocalDateTime.now());
-
-        jobHistoryRepository.save(history); // Save the log entry
+    	jobHistoryRepository.save(history); // Save the log entry
     }
 
     // Method to log status change
@@ -184,4 +189,9 @@ public class PrintJobService {
 
         jobHistoryRepository.save(history);
     }
+    
+    public List<JobHistory> getAllLogs() {
+        return jobHistoryRepository.findAll();
+    }
+
 }
