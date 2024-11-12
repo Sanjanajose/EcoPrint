@@ -1,12 +1,17 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,21 +22,22 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.ecoprint.printmanagement.model.PrintJob;
-import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.JobStatusMessage;
+import com.ecoprint.printmanagement.model.PrintJob;
+import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.service.PrintJobService;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
@@ -221,5 +227,35 @@ public class PrintJobController {
         workbook.write(response.getOutputStream());
         workbook.close();
     }
+    
+                          
+        @GetMapping("/dashboard/filter")
+        @Operation(summary = "Get Dashboard Print Jobs",
+        description = "Retrieve a list of print jobs with optional filters and sorting options for the dashboard.")
+        public ResponseEntity<List<JobHistory>> getDashboardDataByFilters(
+                @RequestParam(required = false) PrintJobStatus status,
+                @RequestParam(required = false) String userName) {    	        	       	
+            if (status != null && !EnumSet.allOf(PrintJobStatus.class).contains(status)) {
+                return ResponseEntity.badRequest().body(Collections.emptyList()); // Return an empty list
+            }
+            List<JobHistory> jobs = printJobService.getFilteredPrintJobs(status,userName);
+            return ResponseEntity.ok(jobs);
+        }
+    
+       
+        @GetMapping("/dashboard/sort")
+        @Operation(summary = "Get Dashboard Print Jobs",
+        description = "Retrieve a list of print jobs with optional filters and sorting options for the dashboard.")
+        public ResponseEntity<List<JobHistory>> getDashboardDataBySort(
+                @RequestParam(defaultValue = "createdAt") String sortBy,
+        	    @RequestParam(defaultValue = "false") boolean sortByTime,
+        	    @RequestParam(required = false) String sortOrder) {    	       	        	       	
+            //String sortBy, boolean sortByTime, String sortOrder
+            List<JobHistory> jobs = printJobService.getSortedPrintJobs(sortBy,sortByTime,sortOrder);
+            return ResponseEntity.ok(jobs);
+        }
+
+
+
 
 }

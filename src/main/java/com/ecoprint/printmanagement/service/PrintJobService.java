@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Sort;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,9 +71,8 @@ public class PrintJobService {
 
 
         printJobRepository.save(printJob);
-        
-        // Log job submission
-        logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, "Job submitted by user");
+      // Log job submission
+       logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, "Job submitted by user");
     }
 
     // Method to validate file type
@@ -171,6 +171,7 @@ public class PrintJobService {
     
     
     public void logJobAction(Long jobId, PrintJobStatus status, String actionDescription) {
+
         JobHistory history = new JobHistory();
         history.setPrintJobId(jobId);
         history.setStatus(status);
@@ -193,5 +194,59 @@ public class PrintJobService {
     public List<JobHistory> getAllLogs() {
         return jobHistoryRepository.findAll();
     }
+    
+    
 
+    @Transactional
+    public List<JobHistory> getFilteredPrintJobs(PrintJobStatus status,String userName){
+    	 List<JobHistory> jobs = null;
+
+         if (status != null) {
+             jobs = jobHistoryRepository.findByStatus(status);
+         } /*else if (userName != null) {
+             jobs = jobHistoryRepository.findByUserName(userName);
+         }*/
+
+		return jobs;
+    	
+    }
+    
+    
+
+    
+    @Transactional
+    public List<JobHistory> getSortedPrintJobs(String sortBy, boolean sortByTime, String sortOrder) {
+        List<JobHistory> jobs = jobHistoryRepository.findAll(); // Fetch all records
+
+        if (sortByTime) {
+            jobs.sort((job1, job2) -> {
+                JobHistory latestHistory1 = jobHistoryRepository.findTopByPrintJobIdOrderByTimestampDesc(job1.getPrintJobId());
+                JobHistory latestHistory2 = jobHistoryRepository.findTopByPrintJobIdOrderByTimestampDesc(job2.getPrintJobId());
+
+                // Check for null values to avoid NullPointerException
+                if (latestHistory1 == null && latestHistory2 == null) {
+                    return 0;
+                } else if (latestHistory1 == null) {
+                    return 1; // Treat null as greater to place it at the end
+                } else if (latestHistory2 == null) {
+                    return -1; // Treat null as greater to place it at the end
+                } else {
+                    int comparison = latestHistory1.getTimestamp().compareTo(latestHistory2.getTimestamp());
+                    // Reverse the order if descending
+                    return "desc".equalsIgnoreCase(sortOrder) ? -comparison : comparison;
+                }
+            });
+        } else {
+            // Optional: Sort by another field if sortByTime is false
+            jobs.sort((job1, job2) -> {
+                int comparison = job1.getTimestamp().compareTo(job2.getTimestamp());
+                return "desc".equalsIgnoreCase(sortOrder) ? -comparison : comparison;
+            });
+        }
+
+        return jobs;
+    }
+
+    
+    
 }
