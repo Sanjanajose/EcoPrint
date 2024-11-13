@@ -38,6 +38,8 @@ import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.service.PrintJobService;
+import org.springframework.security.core.Authentication;
+
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
@@ -230,8 +232,9 @@ public class PrintJobController {
     
                           
         @GetMapping("/dashboard/filter")
-        @Operation(summary = "Get Dashboard Print Jobs",
-        description = "Retrieve a list of print jobs with optional filters and sorting options for the dashboard.")
+        @Operation(summary = "Get Dashboard Print Jobs by Filter",
+        	    description = "Retrieve a list of print jobs based on optional filters such as job status and username. Allows filtering by print job status and user who initiated the job.")
+        @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
         public ResponseEntity<List<JobHistory>> getDashboardDataByFilters(
                 @RequestParam(required = false) PrintJobStatus status,
                 @RequestParam(required = false) String userName) {    	        	       	
@@ -244,14 +247,19 @@ public class PrintJobController {
     
        
         @GetMapping("/dashboard/sort")
-        @Operation(summary = "Get Dashboard Print Jobs",
-        description = "Retrieve a list of print jobs with optional filters and sorting options for the dashboard.")
+        @Operation(summary = "Get Dashboard Print Jobs by Sorting",
+        	    description = "Retrieve a sorted list of print jobs based on optional parameters such as sort field and order. Sorts print jobs for the logged-in user by a specified attribute and order.")
+        @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
         public ResponseEntity<List<JobHistory>> getDashboardDataBySort(
                 @RequestParam(defaultValue = "createdAt") String sortBy,
         	    @RequestParam(defaultValue = "false") boolean sortByTime,
-        	    @RequestParam(required = false) String sortOrder) {    	       	        	       	
-            //String sortBy, boolean sortByTime, String sortOrder
-            List<JobHistory> jobs = printJobService.getSortedPrintJobs(sortBy,sortByTime,sortOrder);
+        	    @RequestParam(required = false) String sortOrder,
+        	    Authentication authentication) {    	       	        	       	
+           // Get the current logged-in username
+           String currentUsername = authentication.getName();
+           // Fetch sorted jobs for the specific user
+           List<JobHistory> jobs = printJobService.getSortedPrintJobs(sortBy, sortByTime, sortOrder, currentUsername);
+
             return ResponseEntity.ok(jobs);
         }
 

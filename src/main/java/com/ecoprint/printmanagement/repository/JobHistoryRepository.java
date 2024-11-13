@@ -16,10 +16,12 @@ public interface JobHistoryRepository extends JpaRepository<JobHistory, Long> {
     List<JobHistory> findByPrintJobIdOrderByTimestampAsc(Long printJobId);
     List<JobHistory> findByStatus(PrintJobStatus status);
     JobHistory findTopByPrintJobIdOrderByTimestampDesc(Long printJobId);  
-    /*
-    @Query("SELECT jh FROM JobHistory jh JOIN jh.printJob pj WHERE pj.userName = :userName")
-    List<JobHistory> findByUserName(@Param("userName") String userName);
-*/
+   
+    
+    List<JobHistory> findByUserName(String userName);
+
+    
+
 
 
     

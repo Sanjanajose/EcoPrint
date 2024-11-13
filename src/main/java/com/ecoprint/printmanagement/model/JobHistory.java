@@ -2,6 +2,7 @@ package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDateTime;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
 @Entity
@@ -25,15 +26,20 @@ public class JobHistory {
 
     @Column(name = "comments")
     private String comments;
+    
+    @Column(name = "user_name", nullable = true)
+    private String userName;
+
 
     // Constructors
     public JobHistory() {}
 
-    public JobHistory(Long printJobId, PrintJobStatus status, LocalDateTime timestamp, String comments) {
+    public JobHistory(Long printJobId, PrintJobStatus status, LocalDateTime timestamp, String comments,String userName) {
         this.printJobId = printJobId;
         this.status = status;
         this.timestamp = timestamp;
         this.comments = comments;
+        this.userName=userName;
     }
 
     // Getters and Setters
@@ -76,4 +82,14 @@ public class JobHistory {
     public void setComments(String comments) {
         this.comments = comments;
     }
+
+	public String getUserName() {
+		return userName;
+	}
+
+	public void setUserName(String userName) {
+		this.userName = userName;
+	}
+    
+    
 }

@@ -72,7 +72,7 @@ public class PrintJobService {
 
         printJobRepository.save(printJob);
       // Log job submission
-       logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, "Job submitted by user");
+       logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, "Job submitted by user",Optional.of(printJob.getUserName()));
     }
 
     // Method to validate file type
@@ -120,7 +120,7 @@ public class PrintJobService {
         }
 
         savePrintJob(printJob);
-        logJobAction(jobId, status, comments);
+        logJobAction(jobId, status, comments,Optional.of(printJob.getUserName()));
     }
 
     public void savePrintJob(PrintJob printJob) {
@@ -148,7 +148,7 @@ public class PrintJobService {
         }
 
         printJobRepository.saveAll(jobs); // Save updated jobs in batch
-        logJobAction(jobId, PrintJobStatus.QUEUED, "Job prioritized by Admin");
+        logJobAction(jobId, PrintJobStatus.QUEUED, "Job prioritized by Admin",Optional.empty());
         messagingTemplate.convertAndSend("/topic/job-queue", jobs); // Broadcast updated queue
     }
 
@@ -170,13 +170,16 @@ public class PrintJobService {
     
     
     
-    public void logJobAction(Long jobId, PrintJobStatus status, String actionDescription) {
+    public void logJobAction(Long jobId, PrintJobStatus status, String actionDescription,Optional<String> userName) {
 
         JobHistory history = new JobHistory();
         history.setPrintJobId(jobId);
         history.setStatus(status);
         history.setComments(actionDescription);
         history.setTimestamp(LocalDateTime.now());
+       // history.setUserName(userName);
+        userName.ifPresent(history::setUserName);
+
     	jobHistoryRepository.save(history); // Save the log entry
     }
 
@@ -203,9 +206,9 @@ public class PrintJobService {
 
          if (status != null) {
              jobs = jobHistoryRepository.findByStatus(status);
-         } /*else if (userName != null) {
+         } else if (userName != null) {
              jobs = jobHistoryRepository.findByUserName(userName);
-         }*/
+         }
 
 		return jobs;
     	
@@ -215,7 +218,7 @@ public class PrintJobService {
 
     
     @Transactional
-    public List<JobHistory> getSortedPrintJobs(String sortBy, boolean sortByTime, String sortOrder) {
+    public List<JobHistory> getSortedPrintJobs(String sortBy, boolean sortByTime, String sortOrder,String userName) {
         List<JobHistory> jobs = jobHistoryRepository.findAll(); // Fetch all records
 
         if (sortByTime) {
