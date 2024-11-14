@@ -116,7 +116,7 @@ public class PrintJobService {
     
  // Method to upload file and create a new job
    
-    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost)
+    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost,String color,Boolean duplex,String paperSize) 
             throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
@@ -145,6 +145,9 @@ public class PrintJobService {
         printJob.setDescription(description);
         printJob.setPagesPrinted(pagesPrinted);
         printJob.setCost(cost);
+        printJob.setColor(color);
+        printJob.setDuplex(duplex);
+        printJob.setPaperSize(paperSize);
         printJob.setStatus(PrintJobStatus.SUBMITTED);
         printJob.setSubmittedAt(LocalDateTime.now());
 
