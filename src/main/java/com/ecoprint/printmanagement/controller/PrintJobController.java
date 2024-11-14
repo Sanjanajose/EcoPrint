@@ -37,6 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
+import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 
 import com.ecoprint.printmanagement.model.JobHistory;
@@ -45,10 +46,11 @@ import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
+import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.service.NotificationService;
 import com.ecoprint.printmanagement.service.PrintJobService;
 import org.springframework.security.core.Authentication;
-
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
@@ -78,6 +80,9 @@ public class PrintJobController {
 
     @Autowired
     private NotificationService pushNotificationService;
+    
+    @Autowired
+    private UserRepository userrepository;
 
     @GetMapping("/history")
     public List<JobHistory> getJobHistory(@RequestParam Long jobId) {
@@ -285,7 +290,7 @@ public class PrintJobController {
         }
 
 
-    @PostMapping
+    @PostMapping("/addjob")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> addJob(@RequestBody PrintJobRequest jobRequest) {
         printJobService.addJob(jobRequest);

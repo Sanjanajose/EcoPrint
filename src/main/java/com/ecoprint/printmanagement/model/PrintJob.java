@@ -16,10 +16,10 @@ public class PrintJob {
     @Column(name = "id") 
     private Long id;
 
-    // Link to User entity for owner information
-    @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
+    private User user;  // The user associated with this print job
+
 
     // File Details
     @NotNull(message = "File cannot be null.")

@@ -1,6 +1,5 @@
 package com.ecoprint.printmanagement.model;
 
-
 public class PrintJobRequest {
 
     private Long userId;

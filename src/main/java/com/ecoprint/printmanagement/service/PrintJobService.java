@@ -28,10 +28,13 @@ import com.ecoprint.printmanagement.model.NotificationLog;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
+import com.ecoprint.printmanagement.model.Role;
+import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
+import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 
 import org.springframework.security.access.AccessDeniedException;
@@ -57,6 +60,12 @@ public class PrintJobService {
     
     @Autowired
     private NotificationService emailNotificationService;
+    
+    @Autowired
+    private RoleRepository roleRepository;
+    
+   
+
 
     @Autowired
     private NotificationService pushNotificationService;
@@ -115,15 +124,12 @@ public class PrintJobService {
     
     
  // Method to upload file and create a new job
-   
-    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost)
-            throws IOException {
+    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024))
-                    + " MB.");
+            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
         }
 
         String fileType = tika.detect(file.getInputStream());
@@ -138,7 +144,7 @@ public class PrintJobService {
         printJob.setFileName(file.getOriginalFilename());
         printJob.setFileType(fileType);
         printJob.setFileSize(file.getSize());
-        printJob.setUser(user); // Set the User entity
+        printJob.setUser(user);  // Set the User entity
         printJob.setUserName(user.getUsername()); // Populate the userName field
         printJob.setUploadTimestamp(LocalDateTime.now());
         printJob.setFileData(fileData);
@@ -150,10 +156,16 @@ public class PrintJobService {
 
         printJobRepository.save(printJob);
 
-        // Log job submission
+        // Retrieve current user ID for logging
         Long currentUserId = getCurrentUserId();
-        logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, PrintJobStatus.SUBMITTED, currentUserId, "Job submitted by user", Optional.of(printJob.getUserName()));
+
+        // Log job submission
+        
+
+        logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, PrintJobStatus.SUBMITTED, currentUserId, 
+                     "Job submitted by user", Optional.of(printJob.getUserName()));
     }
+
 
 
     // Method to validate file type
@@ -560,29 +572,58 @@ public class PrintJobService {
     }
     
     public void addJob(PrintJobRequest jobRequest) {
-        // Create a new PrintJob object and set its properties from the jobRequest
-        PrintJob job = new PrintJob();
-        job.setStatus(PrintJobStatus.QUEUED);  // Set the job status to QUEUED
-        job.setUserId(jobRequest.getUserId()); // Set the user ID for the job
-        job.setDescription(jobRequest.getDescription());  // Set the job description
-        job.setQueuePosition(getNextQueuePosition());  // Set the queue position for the job
+        // Retrieve the authenticated user's email from the SecurityContext
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentEmail = authentication.getName();
 
-        // Save the new job in the repository
+        // Find the user by email
+        User user = userrepository.findByEmail(currentEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", currentEmail));
+
+        // Ensure fileName is provided in the request
+        if (jobRequest.getFileName() == null || jobRequest.getFileName().isEmpty()) {
+            throw new IllegalArgumentException("fileName must not be null or empty");
+        }
+
+        // Retrieve the file associated with the provided fileName
+        PrintJob uploadedFile = printJobRepository.findByFileName(jobRequest.getFileName())
+                .orElseThrow(() -> new ResourceNotFoundException("File", "fileName", jobRequest.getFileName()));
+
+        // Proceed with creating the PrintJob
+        PrintJob job = new PrintJob();
+        job.setStatus(PrintJobStatus.QUEUED);
+        job.setUser(user);
+        job.setDescription(jobRequest.getDescription());
+        job.setQueuePosition(assignNextQueuePosition());
+        job.setFileData(uploadedFile.getFileData());  // Set fileData from the previously uploaded file
+
+        // Save the job
         printJobRepository.save(job);
 
-        // Get the current user's ID to log the action
-        Long currentUserId = getCurrentUserId();
-        
-        // Log the action for adding the job with relevant details (no previous status)
-        String actionDescription = "Job added to the queue";
-        logJobAction(job.getId(), null, PrintJobStatus.QUEUED, currentUserId, actionDescription, Optional.of(jobRequest.getUserId().toString()));
+        // Log the action
+        logJobAction(job.getId(), null, PrintJobStatus.QUEUED, user.getId(), "Job added to queue", Optional.of(user.getUsername()));
     }
 
 
 
+    // Method to calculate the next available queue position
     private int getNextQueuePosition() {
         Integer maxPosition = printJobRepository.findMaxQueuePosition();
         return (maxPosition == null ? 0 : maxPosition + 1);
+    }
+
+ // Method to determine the priority of a job based on the user's roles
+    public int determinePriority(Long userId) {
+        List<Role> roles = roleRepository.findRolesByUserId(userId); // Fetch roles based on userId
+        for (Role role : roles) {
+            // Use the getRole() method to get the RoleName
+            if (role.getRole() == RoleName.ROLE_ADMIN) {
+                return 1;  // Highest priority
+            } else if (role.getRole() == RoleName.ROLE_USER) {
+                return 3;  // Lowest priority
+            }
+        }
+        return 2;  // Default priority if no matching role is found
     }
 
     
@@ -594,84 +635,81 @@ public class PrintJobService {
         history.setUserId(userId);
         history.setComments(actionDescription);
         history.setTimestamp(LocalDateTime.now());
+        history.setUpdatedStatus(PrintJobStatus.UNKNOWN); // Replace SOME_DEFAULT_STATUS with an appropriate enum value
 
         jobHistoryRepository.save(history);
     }
 
     
     public void reorderJob(Long jobId, int newPosition) {
-        // Retrieve the job with authorization check
+        // Retrieve the job with authorization check (ensure the user is authorized to update the job)
         PrintJob job = findJobIfAuthorized(jobId);
+
+        // Check if the job status is QUEUED; if not, throw an exception
+        if (job.getStatus() != PrintJobStatus.QUEUED) {
+            throw new IllegalStateException("Only jobs with status QUEUED can be reordered.");
+        }
+
+        // Ensure that the new position is valid (it should not be the same as the current position)
+        if (newPosition == job.getQueuePosition()) {
+            throw new IllegalArgumentException("The job is already at the requested position.");
+        }
 
         // Capture the previous position for logging
         int previousPosition = job.getQueuePosition();
 
-        // Adjust positions of other jobs in the queue
+        // Adjust positions of other jobs in the queue to make room for the new position
         adjustQueuePositions(job, newPosition);
 
         // Update the job’s position and save it
         job.setQueuePosition(newPosition);
-        printJobRepository.save(job);
+        printJobRepository.save(job); // Save the updated job with new position
 
         // Create a new JobHistory entry to track the change
         JobHistory jobHistory = new JobHistory();
-        jobHistory.setPrintJobId(jobId);  // Set the job ID
-        jobHistory.setPreviousStatus(job.getStatus());  // Set the previous status of the print job
+        jobHistory.setPrintJobId(jobId);
+        jobHistory.setPreviousStatus(job.getStatus());
 
-        // Ensure updatedStatus is never null
-        PrintJobStatus updatedStatus = job.getStatus();  // Assuming job.getStatus() returns PrintJobStatus
+        // Set the updated status and timestamp
+        jobHistory.setUpdatedStatus(job.getStatus() != null ? job.getStatus() : PrintJobStatus.UNKNOWN);
+        jobHistory.setTimestamp(LocalDateTime.now());
+        jobHistory.setComments("Job reordered in the queue");
+        jobHistory.setPreviousPosition(previousPosition);
+        jobHistory.setNewPosition(newPosition);
 
-        if (updatedStatus == null) {
-            updatedStatus = PrintJobStatus.UNKNOWN;  // Set to a default enum value
-        }
-
-        jobHistory.setUpdatedStatus(updatedStatus);  // Set the status as PrintJobStatus enum
-  // Ensure updatedStatus is always set
-
-        jobHistory.setTimestamp(LocalDateTime.now());  // Set the timestamp of the change
-        jobHistory.setComments("Job reordered in the queue");  // Set the comment for the action
-
-        // Set position change information
-        jobHistory.setPreviousPosition(previousPosition);  // Set the previous position
-        jobHistory.setNewPosition(newPosition);  // Set the new position
-
-        // Get the current user ID for logging
+        // Get the current user ID for logging purposes
         Long currentUserId = getCurrentUserId();
-        jobHistory.setUserId(currentUserId);  // Set the user who performed the action
+        jobHistory.setUserId(currentUserId);
 
         // Save the JobHistory entry
-        jobHistoryRepository.save(jobHistory);  // Save the job history
+        jobHistoryRepository.save(jobHistory);
 
-        // Optionally, log the action for debugging or auditing purposes
+        // Log the queue position change
         logQueuePositionChange(jobId, previousPosition, newPosition, currentUserId, "Job reordered in the queue");
     }
 
-
+    
     private void adjustQueuePositions(PrintJob job, int newPosition) {
         int oldPosition = job.getQueuePosition();
-        
+
         if (newPosition > oldPosition) {
-            // Moving down in the queue - shift jobs between oldPosition and newPosition up by 1
-            List<PrintJob> jobsToShiftUp = printJobRepository
-                .findByQueuePositionBetween(oldPosition + 1, newPosition);
+            // Moving the job down in the queue - shift jobs up by 1
+            List<PrintJob> jobsToShiftUp = printJobRepository.findByQueuePositionBetween(oldPosition + 1, newPosition);
             for (PrintJob j : jobsToShiftUp) {
                 j.setQueuePosition(j.getQueuePosition() - 1);
             }
             printJobRepository.saveAll(jobsToShiftUp);
-            
         } else if (newPosition < oldPosition) {
-            // Moving up in the queue - shift jobs between newPosition and oldPosition down by 1
-            List<PrintJob> jobsToShiftDown = printJobRepository
-                .findByQueuePositionBetween(newPosition, oldPosition - 1);
+            // Moving the job up in the queue - shift jobs down by 1
+            List<PrintJob> jobsToShiftDown = printJobRepository.findByQueuePositionBetween(newPosition, oldPosition - 1);
             for (PrintJob j : jobsToShiftDown) {
                 j.setQueuePosition(j.getQueuePosition() + 1);
             }
             printJobRepository.saveAll(jobsToShiftDown);
         }
-        
-        
-        
     }
+    
+
       
     
     public void removeJob(Long jobId) {
@@ -703,6 +741,10 @@ public class PrintJobService {
                 .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
     }
 
+    public int assignNextQueuePosition() {
+        Integer maxPosition = printJobRepository.findMaxQueuePosition();
+        return (maxPosition == null ? 1 : maxPosition + 1);
+    }
 
     
     

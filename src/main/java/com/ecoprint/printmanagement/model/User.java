@@ -54,6 +54,9 @@ public class User extends DateAudit {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "user_seq")
     @SequenceGenerator(name = "user_seq", allocationSize = 1)
     private Long id;
+    
+    
+    
 
     @NaturalId
     @Column(name = "EMAIL", unique = true)
