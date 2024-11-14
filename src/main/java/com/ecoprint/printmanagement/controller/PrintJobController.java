@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -31,12 +32,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+
+import com.ecoprint.printmanagement.model.PrintJob;
+import com.ecoprint.printmanagement.model.PrintJobRequest;
+import com.ecoprint.printmanagement.model.PrintJobStatus;
+import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.JobStatusMessage;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
+import com.ecoprint.printmanagement.service.NotificationService;
 import com.ecoprint.printmanagement.service.PrintJobService;
 import org.springframework.security.core.Authentication;
 
@@ -62,6 +70,12 @@ public class PrintJobController {
     
     @Autowired
     private PrintJobRepository printJobRepository;
+    
+    @Autowired
+    private NotificationService emailNotificationService;
+
+    @Autowired
+    private NotificationService pushNotificationService;
 
     @GetMapping("/history")
     public List<JobHistory> getJobHistory(@RequestParam Long jobId) {
@@ -110,35 +124,30 @@ public class PrintJobController {
     }
 
     @PutMapping("/{jobId}/status")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
-    @Operation(summary = "Update print job status", description = "Allows an admin to update the status of a print job.")
+    @Operation(summary = "Update print job status", description = "Allows authorized users to update the status of a print job.")
     public ResponseEntity<String> updateJobStatus(
             @PathVariable Long jobId,
             @RequestParam("status") PrintJobStatus status) {
-        PrintJob job = printJobService.findPrintJobById(jobId);
-        if (job == null) {
+
+        // Delegate the job status update to the service method, including logging and notifications
+        try {
+            printJobService.updateJobStatus(jobId, status, "Status updated to " + status.name());
+        } catch (ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Print job not found");
         }
 
-        job.setStatus(status);
-        LocalDateTime now = LocalDateTime.now();
-        switch (status) {
-            case QUEUED -> job.setQueuedAt(now);
-            case PAUSED -> job.setPausedAt(now);
-            case READY -> job.setReadyAt(now);
-            case PRINTING -> job.setPrintingAt(now);
-            case COMPLETED -> job.setCompletedAt(now);
-            case FAILED -> job.setFailedAt(now);
-            case DELETED -> job.setDeletedAt(now);
-            case FAVORITE -> job.setFavoriteAt(now);
-        }
-
-        printJobService.savePrintJob(job);
-        printJobService.logStatusChange(jobId, status, "Status updated to " + status.name());
-
-        messagingTemplate.convertAndSend("/topic/status", new JobStatusMessage(jobId, status, "Status updated"));
+        // Return success response if everything was processed correctly
         return ResponseEntity.ok("Print job status updated to " + status);
     }
+    
+    @DeleteMapping("/{jobId}")
+    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    public ResponseEntity<String> removeJob(@PathVariable Long jobId) {
+        printJobService.removeJob(jobId);
+        return ResponseEntity.ok("Print job removed from queue");
+    }
+
+
 
     @PutMapping("/{jobId}/pause")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
@@ -202,6 +211,7 @@ public class PrintJobController {
         return ResponseEntity.ok(queuedJobs);
     }
     
+
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @Operation(summary = "Export Print Job Logs to Excel", description = "Exports the print job logs to an Excel file for admins.")
     @GetMapping("/export/excel")
@@ -264,6 +274,27 @@ public class PrintJobController {
         }
 
 
+    @PostMapping
+    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    public ResponseEntity<String> addJob(@RequestBody PrintJobRequest jobRequest) {
+        printJobService.addJob(jobRequest);
+        return ResponseEntity.status(HttpStatus.CREATED).body("Print job added to queue");
+    }
+    
+    
+    @PutMapping("/jobs/{jobId}/resume")
+    public ResponseEntity<String> resumeJob(@PathVariable Long jobId) {
+        printJobService.resumeJob(jobId);
+        return ResponseEntity.ok("Job resumed successfully");
+    }
+    
+    @PutMapping("/{jobId}/reorder")
+    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    public ResponseEntity<String> reorderJob(@PathVariable Long jobId, @RequestParam int newPosition) {
+        printJobService.reorderJob(jobId, newPosition);
+        return ResponseEntity.ok("Print job reordered");
+    }
+  
 
 
 }

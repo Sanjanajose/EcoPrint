@@ -193,6 +193,9 @@ public class UserController {
         return ResponseEntity.ok(new ApiResponse(true, "Admin Access Given Successfully"));
     }
 
+    /**
+     * Updates the logged-in user's own profile.
+     */
     @PutMapping("/me")
     @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Allows the logged-in user to update their own profile")
@@ -203,33 +206,40 @@ public class UserController {
 
         Long userId = currentUser.getId();
 
+        // Validate that the email isn't already in use by another user
         if (userService.existsByEmail(updateRequest.getEmail()) && !currentUser.getEmail().equals(updateRequest.getEmail())) {
             return ResponseEntity.badRequest().body(new ApiResponse(false, "Email is already in use."));
         }
 
+        // Validate and upload profile picture if provided
         if (profilePicture != null && !profilePicture.isEmpty()) {
+            // Validate file size (5MB limit)
             long maxFileSize = 5 * 1024 * 1024;
             if (profilePicture.getSize() > maxFileSize) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, "File size exceeds the maximum limit of 5MB."));
             }
 
+            // Validate file type (JPEG, PNG)
             Set<String> allowedContentTypes = Set.of("image/jpeg", "image/png");
             if (!allowedContentTypes.contains(profilePicture.getContentType())) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid file type. Only JPEG and PNG are allowed."));
             }
 
+            // Handle the upload logic
             try {
                 String profilePictureUrl = userService.uploadProfilePicture(profilePicture, 300, 300);
-                updateRequest.setProfilePicture(profilePictureUrl);
+                updateRequest.setProfilePicture(profilePictureUrl);  // Set the profile picture URL
             } catch (FileUploadException e) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, e.getMessage()));
             }
         }
 
+        // Prevent the user from updating their own roles
         Set<String> currentRoles = currentUser.getAuthorities().stream()
                 .map(role -> role.getAuthority())
                 .collect(Collectors.toSet());
 
+        // Update user details
         User updatedUserData = new User();
         updatedUserData.setUsername(updateRequest.getUsername());
         updatedUserData.setEmail(updateRequest.getEmail());
@@ -239,19 +249,26 @@ public class UserController {
         updatedUserData.setCountry(updateRequest.getCountry());
         updatedUserData.setDob(updateRequest.getDob());
 
+        // Set updated profile picture if available
         if (updateRequest.getProfilePicture() != null) {
             updatedUserData.setProfilePicture(updateRequest.getProfilePicture());
         }
 
+        // Update user in the service layer
         User updatedUser = userService.updateUser(userId, updatedUserData, currentRoles);
 
+        // Trigger user account change event
         OnUserAccountChangeEvent userUpdateEvent = new OnUserAccountChangeEvent(updatedUser, 
             "Update Profile", "User updated their own profile successfully");
         applicationEventPublisher.publishEvent(userUpdateEvent);
 
         return ResponseEntity.ok(new ApiResponse(true, "Profile updated successfully."));
     }
+
    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
+
+    
+    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
     @PostMapping("/{userId}/assignRoles")
     public ResponseEntity<ApiResponse> assignRolesToUser(
             @PathVariable Long userId,
@@ -261,7 +278,14 @@ public class UserController {
         userService.assignRolesToUser(userId, roleAssignmentRequest.getRoleNames());
 
         return ResponseEntity.ok(new ApiResponse(true, "Roles assigned successfully"));
+
     }    
+
+    }
+
+
+
+
     
     
     @PreAuthorize("hasRole('ROLE_SUPERADMIN')")

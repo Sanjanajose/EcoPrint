@@ -37,15 +37,28 @@ import com.ecoprint.printmanagement.model.*;
 import com.ecoprint.printmanagement.model.payload.LogOutRequest;
 import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.model.payload.RoleAssignmentRequest;
+import com.ecoprint.printmanagement.repository.RoleRepository;
+import com.ecoprint.printmanagement.repository.UserDeviceRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.service.ActivityLogService;
 
+import jakarta.transaction.Transactional;
 import net.coobird.thumbnailator.Thumbnails;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 
 @Service
 public class UserService {
 
-    private final PasswordEncoder passwordEncoder;
+	
+	@PersistenceContext
+    private EntityManager entityManager;  
+	private final RoleRepository roleRepository;
+	private final UserDeviceRepository userDeviceRepository;    
+	private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final RoleService roleService;
     private final UserDeviceService userDeviceService;
@@ -54,8 +67,10 @@ public class UserService {
     private static final Set<String> ALLOWED_FILE_FORMATS = Set.of("jpg", "jpeg", "png");
 
     @Autowired
-    public UserService(PasswordEncoder passwordEncoder, UserRepository userRepository, RoleService roleService,
+    public UserService(RoleRepository roleRepository, UserDeviceRepository userDeviceRepository, PasswordEncoder passwordEncoder, UserRepository userRepository, RoleService roleService,
                         UserDeviceService userDeviceService, RefreshTokenService refreshTokenService, ActivityLogService activityLogService) {
+    	this.roleRepository = roleRepository;
+    	this.userDeviceRepository = userDeviceRepository;
         this.passwordEncoder = passwordEncoder;
         this.userRepository = userRepository;
         this.roleService = roleService;
@@ -197,10 +212,15 @@ public class UserService {
     }
 
 
+    /**
+     * Updates a user's details, including roles, while performing necessary validations.
+     */
     public User updateUser(Long userId, User updatedUserData, Set<String> roleNames) {
+        // Find the existing user
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
+        // Update basic information
         user.setUsername(updatedUserData.getUsername());
         user.setEmail(updatedUserData.getEmail());
         user.setPhone(updatedUserData.getPhone());
@@ -210,6 +230,7 @@ public class UserService {
         user.setDob(updatedUserData.getDob());
         user.setProfilePicture(updatedUserData.getProfilePicture());
 
+        // Check if the new email or username is unique
         if (userRepository.existsByEmail(updatedUserData.getEmail()) && !user.getEmail().equals(updatedUserData.getEmail())) {
             throw new ResourceAlreadyInUseException("Email", "Address", updatedUserData.getEmail());
         }
@@ -218,24 +239,24 @@ public class UserService {
             throw new ResourceAlreadyInUseException("Username", "Name", updatedUserData.getUsername());
         }
 
+        // Validate and assign roles
         Set<Role> updatedRoles = new HashSet<>();
         for (String roleName : roleNames) {
             Role role = roleService.findByName(roleName)
                     .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
 
+            // Ensure only users with appropriate permissions can assign admin roles
             if (role.isAdminRole() && !currentUserHasPermissionToAssignAdmin()) {
                 throw new AccessDeniedException("You do not have permission to assign admin roles.");
             }
             updatedRoles.add(role);
         }
 
+        // Assign the validated roles to the user
         user.setRoles(updatedRoles);
 
-        User savedUser = userRepository.save(user);
-
-        activityLogService.logActivity("User updated", user.getUsername(), user.getId(), "User updated their details.");
-
-        return savedUser;
+        // Save the updated user information
+        return userRepository.save(user);
     }
 
     public User assignRolesToUser(Long userId, Set<String> roleNames) {
@@ -276,6 +297,7 @@ public class UserService {
         return currentUser.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_SUPER_ADMIN"));
     }
+
 
     public void logoutUser(@CurrentUser CustomUserDetails currentUser, LogOutRequest logOutRequest) {
         String deviceId = logOutRequest.getDeviceInfo().getDeviceId();
@@ -349,5 +371,45 @@ public class UserService {
         return userWithEmail.map(user -> user.getId().equals(userId)).orElse(false);
     }
 
-	
+    public List<String> getAdminNotificationTokens() {
+        // Fetch the admin role from RoleRepository
+        Optional<Role> adminRoleOpt = roleRepository.findByRole(RoleName.ROLE_ADMIN);
+
+        if (adminRoleOpt.isPresent()) {
+            Role adminRole = adminRoleOpt.get();
+            
+            // Find users with the admin role and get their associated notification tokens from UserDevice
+            return userRepository.findByRolesContaining(adminRole)
+                                 .stream()
+                                 .map(User::getId) // Get User IDs for admin users
+                                 .flatMap(userId -> userDeviceRepository.findByUserId(userId).stream()) // Fetch UserDevice by userId and return as Stream
+                                 .map(UserDevice::getNotificationToken) // Get notification tokens
+                                 .filter(Objects::nonNull) // Filter out any null tokens
+                                 .collect(Collectors.toList());
+        }
+
+        return Collections.emptyList();
+    }
+
+
+    public List<String> getAdminEmails() {
+        // Fetch the admin role from RoleRepository
+        Optional<Role> adminRoleOpt = roleRepository.findByRole(RoleName.ROLE_ADMIN);
+
+        // Ensure the role exists before proceeding
+        if (adminRoleOpt.isPresent()) {
+            Role adminRole = adminRoleOpt.get();
+
+            // Fetch users with the admin role from UserRepository
+            return userRepository.findByRolesContaining(adminRole)
+                                 .stream()
+                                 .map(User::getEmail)  // Assuming User entity has an email field
+                                 .collect(Collectors.toList());
+        }
+
+        // Return an empty list if ROLE_ADMIN does not exist
+        return Collections.emptyList();
+    }
+
+
 }

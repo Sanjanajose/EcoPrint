@@ -10,5 +10,6 @@ public enum PrintJobStatus {
     COMPLETED,
     FAILED,
     DELETED,
-    FAVORITE
+    FAVORITE,
+    UNKNOWN
 }

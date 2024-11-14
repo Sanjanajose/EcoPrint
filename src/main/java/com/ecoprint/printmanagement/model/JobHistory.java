@@ -17,9 +17,19 @@ public class JobHistory {
     @Column(name = "print_job_id", nullable = false)
     private Long printJobId;
 
+    @NotNull
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private PrintJobStatus status;
+    @Column(name = "previous_status", nullable = true)
+    private PrintJobStatus previousStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "updated_status", nullable = false) // This ensures the column is NOT NULL in the DB
+    private PrintJobStatus updatedStatus;
+
+
 
     @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
@@ -27,16 +37,31 @@ public class JobHistory {
     @Column(name = "comments")
     private String comments;
     
+
     @Column(name = "user_name", nullable = true)
     private String userName;
+
+    // New fields for tracking position changes
+    @Column(name = "previous_position")
+    private Integer previousPosition;
+
+    @Column(name = "new_position")
+    private Integer newPosition;
+
 
 
     // Constructors
     public JobHistory() {}
 
+
     public JobHistory(Long printJobId, PrintJobStatus status, LocalDateTime timestamp, String comments,String userName) {
+
+    public JobHistory(Long printJobId, Long userId, PrintJobStatus previousStatus, PrintJobStatus updatedStatus, LocalDateTime timestamp, String comments) {
+
         this.printJobId = printJobId;
-        this.status = status;
+        this.userId = userId;
+        this.previousStatus = previousStatus;
+        this.updatedStatus = updatedStatus;
         this.timestamp = timestamp;
         this.comments = comments;
         this.userName=userName;
@@ -59,13 +84,31 @@ public class JobHistory {
         this.printJobId = printJobId;
     }
 
-    public PrintJobStatus getStatus() {
-        return status;
+    public Long getUserId() {
+        return userId;
     }
 
-    public void setStatus(PrintJobStatus status) {
-        this.status = status;
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
+
+    public PrintJobStatus getPreviousStatus() {
+        return previousStatus;
+    }
+
+    public void setPreviousStatus(PrintJobStatus previousStatus) {
+        this.previousStatus = previousStatus;
+    }
+
+    public PrintJobStatus getUpdatedStatus() {
+        return updatedStatus;
+    }
+
+    public void setUpdatedStatus(PrintJobStatus updatedStatus) {
+        this.updatedStatus = updatedStatus;
+    }
+    
+    
 
     public LocalDateTime getTimestamp() {
         return timestamp;
@@ -83,6 +126,7 @@ public class JobHistory {
         this.comments = comments;
     }
 
+
 	public String getUserName() {
 		return userName;
 	}
@@ -92,4 +136,22 @@ public class JobHistory {
 	}
     
     
+
+    
+    public Integer getPreviousPosition() {
+        return previousPosition;
+    }
+
+    public void setPreviousPosition(Integer previousPosition) {
+        this.previousPosition = previousPosition;
+    }
+
+    public Integer getNewPosition() {
+        return newPosition;
+    }
+
+    public void setNewPosition(Integer newPosition) {
+        this.newPosition = newPosition;
+    }
+
 }

@@ -10,15 +10,20 @@ import jakarta.validation.constraints.NotNull;
 @Table(name = "print_jobs") // Specifies the table name in the database
 public class PrintJob {
 
+    // Primary Key
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id") // Specifies the column name in the database
+    @Column(name = "id") 
     private Long id;
 
-    public PrintJob() {}
+    // Link to User entity for owner information
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
+    // File Details
     @NotNull(message = "File cannot be null.")
-    @Column(name = "file_name", nullable = false) // Customize column name and make it non-nullable
+    @Column(name = "file_name", nullable = false) 
     private String fileName;
 
     @Column(name = "file_type", nullable = false)
@@ -27,6 +32,11 @@ public class PrintJob {
     @Column(name = "file_size", nullable = false)
     private long fileSize;
 
+    @Lob
+    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = false)
+    private byte[] fileData;
+
+    // Job Metadata
     @NotEmpty(message = "User name is required.")
     @Column(name = "user_name", nullable = false)
     private String userName;
@@ -35,16 +45,16 @@ public class PrintJob {
     private LocalDateTime uploadTimestamp;
     
     @Column(name = "description", length = 500)
-    private String description;  // Field to store the job description
+    private String description;
+
+    // Queue Management
+    @Column
+    private int queuePosition;
 
     @Column
-    private Integer priority;  // Change from 'int' to 'Integer'
+    private Integer priority;
 
-    @Lob
-    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = false)
-    private byte[] fileData;  // Field to store the file content
-
-    
+    // Print Details
     @NotNull(message = "Pages printed is mandatory")
     @Min(value = 1, message = "Pages printed must be at least 1")
     @Column(name="pages_printed", nullable = false)
@@ -53,12 +63,12 @@ public class PrintJob {
     @Column(name="cost", nullable = false)
     private double cost;
 
-    // New field for job status
+    // Job Status
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private PrintJobStatus status;
 
-    // New fields for tracking job status timestamps
+    // Timestamps for Job Statuses
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
 
@@ -86,10 +96,16 @@ public class PrintJob {
     @Column(name = "favorite_at")
     private LocalDateTime favoriteAt;
 
-    // Getters and Setters for all fields
+    // Constructors
+    public PrintJob() {}
+
+    // Getters and Setters
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
@@ -100,17 +116,23 @@ public class PrintJob {
     public long getFileSize() { return fileSize; }
     public void setFileSize(long fileSize) { this.fileSize = fileSize; }
 
+    public byte[] getFileData() { return fileData; }
+    public void setFileData(byte[] fileData) { this.fileData = fileData; }
+
     public String getUserName() { return userName; }
     public void setUserName(String userName) { this.userName = userName; }
 
     public LocalDateTime getUploadTimestamp() { return uploadTimestamp; }
     public void setUploadTimestamp(LocalDateTime uploadTimestamp) { this.uploadTimestamp = uploadTimestamp; }
 
-    public byte[] getFileData() { return fileData; }
-    public void setFileData(byte[] fileData) { this.fileData = fileData; }
-
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public int getQueuePosition() { return queuePosition; }
+    public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
+
+    public Integer getPriority() { return priority; }
+    public void setPriority(Integer priority) { this.priority = priority; }
 
     public int getPagesPrinted() { return pagesPrinted; }
     public void setPagesPrinted(int pagesPrinted) { this.pagesPrinted = pagesPrinted; }
@@ -148,13 +170,17 @@ public class PrintJob {
     public LocalDateTime getFavoriteAt() { return favoriteAt; }
     public void setFavoriteAt(LocalDateTime favoriteAt) { this.favoriteAt = favoriteAt; }
     
- // Getter and Setter
-    public Integer getPriority() {
-        return priority;
+ // Convenience method to get userId from the User object
+    public Long getUserId() {
+        return user != null ? user.getId() : null;
     }
 
-    public void setPriority(Integer priority) {
-        this.priority = priority;
+    // Convenience method to set User by userId (requires a User object)
+    public void setUserId(Long userId) {
+        if (user == null) {
+            user = new User();
+        }
+        user.setId(userId);  // Assuming User has a setId method
     }
 
 }

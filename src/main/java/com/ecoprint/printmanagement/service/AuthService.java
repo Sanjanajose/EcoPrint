@@ -110,11 +110,8 @@ public class AuthService {
     public Boolean usernameAlreadyExists(String username) {
         return userService.existsByUsername(username);
     }
-
-
     
-    
-    
+        
     
     /**
      * Validates user credentials and returns user if valid.
