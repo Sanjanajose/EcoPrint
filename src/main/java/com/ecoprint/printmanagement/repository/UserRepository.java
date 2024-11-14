@@ -13,7 +13,6 @@
  */
 package com.ecoprint.printmanagement.repository;
 
-
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -23,10 +22,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
-@Repository
 
+
+@Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByUsername(String username);
@@ -36,7 +37,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
     Boolean existsByUsername(String username);
-
 
     // Find user by phone number
     Optional<User> findByPhone(String phone);
@@ -55,15 +55,24 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Find users by profile picture URL
     List<User> findByProfilePicture(String profilePicture);
-    
+
     boolean existsById(Long userId);
+
+    
     
     
     @Query("SELECT CASE WHEN COUNT(r) > 0 THEN TRUE ELSE FALSE END " +
-    	       "FROM USER u JOIN u.roles r " +
-    	       "WHERE u.id = :userId AND r.role = :roleName")
-    	Boolean hasRole(@Param("userId") Long userId, @Param("roleName") RoleName roleName);
+ 	       "FROM USER u JOIN u.roles r " +
+ 	       "WHERE u.id = :userId AND r.role = :roleName")
+ 	Boolean hasRole(@Param("userId") Long userId, @Param("roleName") RoleName roleName);
+
+    List<User> findByRolesContaining(Role role);
+    
+    
 
 
-
+    
+    
+    
+    
 }

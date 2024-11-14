@@ -13,6 +13,7 @@
  */
 package com.ecoprint.printmanagement.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,4 +29,8 @@ public interface UserDeviceRepository extends JpaRepository<UserDevice, Long> {
     Optional<UserDevice> findByRefreshToken(RefreshToken refreshToken);
 
     Optional<UserDevice> findByUserIdAndDeviceId(Long userId, String userDeviceId);
+    
+    List<UserDevice> findByUserId(Long userId);
+
+  
 }

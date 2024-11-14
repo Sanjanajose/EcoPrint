@@ -60,7 +60,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        // Bypass JWT filter for WebSocket handshake requests
         if ("websocket".equalsIgnoreCase(request.getHeader("Upgrade"))) {
             filterChain.doFilter(request, response);
             return;
@@ -68,23 +67,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             String jwt = getJwtFromRequest(request);
-
             if (StringUtils.hasText(jwt) && jwtTokenValidator.validateToken(jwt)) {
                 Long userId = jwtTokenProvider.getUserIdFromJWT(jwt);
+                logger.debug("User ID from JWT: " + userId);  // Debugging line
+
                 UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+                if (userDetails == null) {
+                    logger.error("UserDetails is null for User ID: " + userId);
+                }
+
                 List<GrantedAuthority> authorities = jwtTokenProvider.getAuthoritiesFromJWT(jwt);
-                UsernamePasswordAuthenticationToken authentication = 
+                logger.debug("Authorities: " + authorities);
+
+                UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(userDetails, jwt, authorities);
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (Exception ex) {
-//            log.error("Failed to set user authentication in security context: ", ex);
+            logger.error("Failed to authenticate user: ", ex);
             throw ex;
         }
 
         filterChain.doFilter(request, response);
     }
+
+    
+    
+    
 
     /**
      * Extract the token from the Authorization request header

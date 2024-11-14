@@ -133,6 +133,9 @@ public class AuthController {
                 })
                 .orElseThrow(() -> new UserRegistrationException(registrationRequest.getEmail(), "Missing user object in database"));
     }
+    
+    
+    
 
 
 
