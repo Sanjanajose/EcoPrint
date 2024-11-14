@@ -265,7 +265,6 @@ public class UserController {
         return ResponseEntity.ok(new ApiResponse(true, "Profile updated successfully."));
     }
 
-   @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
 
     
     @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
@@ -281,7 +280,7 @@ public class UserController {
 
     }    
 
-    }
+    
 
 
 

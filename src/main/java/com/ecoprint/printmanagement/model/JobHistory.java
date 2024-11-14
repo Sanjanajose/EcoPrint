@@ -54,9 +54,9 @@ public class JobHistory {
     public JobHistory() {}
 
 
-    public JobHistory(Long printJobId, PrintJobStatus status, LocalDateTime timestamp, String comments,String userName) {
+ 
 
-    public JobHistory(Long printJobId, Long userId, PrintJobStatus previousStatus, PrintJobStatus updatedStatus, LocalDateTime timestamp, String comments) {
+    public JobHistory(Long printJobId, Long userId, PrintJobStatus previousStatus, PrintJobStatus updatedStatus, LocalDateTime timestamp, String comments,String userName) {
 
         this.printJobId = printJobId;
         this.userId = userId;

@@ -114,13 +114,16 @@ public class PrintJobService {
     
     
     
-
-    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost) throws IOException {
+ // Method to upload file and create a new job
+   
+    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost)
+            throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
+            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024))
+                    + " MB.");
         }
 
         String fileType = tika.detect(file.getInputStream());
@@ -135,7 +138,7 @@ public class PrintJobService {
         printJob.setFileName(file.getOriginalFilename());
         printJob.setFileType(fileType);
         printJob.setFileSize(file.getSize());
-        printJob.setUser(user);  // Set the User entity
+        printJob.setUser(user); // Set the User entity
         printJob.setUserName(user.getUsername()); // Populate the userName field
         printJob.setUploadTimestamp(LocalDateTime.now());
         printJob.setFileData(fileData);
@@ -145,19 +148,11 @@ public class PrintJobService {
         printJob.setStatus(PrintJobStatus.SUBMITTED);
         printJob.setSubmittedAt(LocalDateTime.now());
 
-
         printJobRepository.save(printJob);
 
-      // Log job submission
-       logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, "Job submitted by user",Optional.of(printJob.getUserName()));
-
-
-        // Retrieve current user ID for logging
-        Long currentUserId = getCurrentUserId();
-
         // Log job submission
-        logJobAction(printJob.getId(), null, PrintJobStatus.SUBMITTED, currentUserId, "Job submitted by user");
-
+        Long currentUserId = getCurrentUserId();
+        logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, PrintJobStatus.SUBMITTED, currentUserId, "Job submitted by user", Optional.of(printJob.getUserName()));
     }
 
 
@@ -178,9 +173,15 @@ public class PrintJobService {
 
     // Method to download file
     public Resource downloadFile(Long id) {
+        // Retrieve the print job based on the provided ID
         PrintJob printJob = findPrintJobById(id);
-        logJobAction(printJob.getId(), printJob.getStatus(), printJob.getStatus(), getCurrentUserId(), "File downloaded by user");
-        return new ByteArrayResource(printJob.getFileData()); 
+
+        // Log the download action for auditing purposes
+        Long currentUserId = getCurrentUserId();
+        logJobAction(printJob.getId(), printJob.getStatus(), printJob.getStatus(), currentUserId, "File downloaded by user", Optional.empty());
+
+        // Return the file as a ByteArrayResource for download
+        return new ByteArrayResource(printJob.getFileData());
     }
 
     // Find PrintJob by ID
@@ -188,6 +189,7 @@ public class PrintJobService {
         return printJobRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("PrintJob not found with id: " + id));
     }
+    
 
     public void updateJobStatus(Long jobId, PrintJobStatus status, String comments) {
         // Retrieve the job with authorization check (only job owner or admin can access)
@@ -233,27 +235,38 @@ public class PrintJobService {
         printJob.setStatus(status);
         LocalDateTime now = LocalDateTime.now();
         switch (status) {
-            case QUEUED -> printJob.setQueuedAt(now);
-            case PAUSED -> printJob.setPausedAt(now);
-            case READY -> printJob.setReadyAt(now);
-            case PRINTING -> printJob.setPrintingAt(now);
-            case COMPLETED -> printJob.setCompletedAt(now);
-            case FAILED -> printJob.setFailedAt(now);
-            case DELETED -> printJob.setDeletedAt(now);
-            case FAVORITE -> printJob.setFavoriteAt(now);
+            case QUEUED:
+                printJob.setQueuedAt(now);
+                break;
+            case PAUSED:
+                printJob.setPausedAt(now);
+                break;
+            case READY:
+                printJob.setReadyAt(now);
+                break;
+            case PRINTING:
+                printJob.setPrintingAt(now);
+                break;
+            case COMPLETED:
+                printJob.setCompletedAt(now);
+                break;
+            case FAILED:
+                printJob.setFailedAt(now);
+                break;
+            case DELETED:
+                printJob.setDeletedAt(now);
+                break;
+            case FAVORITE:
+                printJob.setFavoriteAt(now);
+                break;
         }
 
         // Save the updated print job
         savePrintJob(printJob);
 
-        logJobAction(jobId, status, comments,Optional.of(printJob.getUserName()));
-
-
-        // Get the current user ID
+        // Log job action with updated status and user info
         Long currentUserId = getCurrentUserId();
-
-        // Log the action for the job update with previous and current statuses
-        logJobAction(jobId, previousStatus, status, currentUserId, comments);
+        logJobAction(jobId, previousStatus, status, currentUserId, comments, Optional.of(printJob.getUserName()));
 
         // Check if the job status is FAILED or PAUSED and trigger notifications
         if (status == PrintJobStatus.FAILED || status == PrintJobStatus.PAUSED) {
@@ -262,16 +275,16 @@ public class PrintJobService {
             pushNotificationService.sendPushNotification("Job Status Alert", message);
             logNotification("sanjanajose97@gmail.com", message);
         }
-
     }
 
+    
+        private boolean isStatusAllowedForUser(PrintJobStatus status) {
+            return status == PrintJobStatus.PAUSED || 
+                   status == PrintJobStatus.FAVORITE;
+        }
 
-    
-    
-    private boolean isStatusAllowedForUser(PrintJobStatus status) {
-        return status == PrintJobStatus.PAUSED || 
-               status == PrintJobStatus.FAVORITE;
-    }
+
+
 
 
     // This method logs the notification (for auditing purposes)
@@ -287,6 +300,7 @@ public class PrintJobService {
     }
 
     public void prioritizeJob(Long jobId) {
+        // Retrieve the job to be prioritized
         PrintJob jobToPrioritize = findPrintJobById(jobId);
 
         // Capture the previous priority for logging
@@ -294,63 +308,58 @@ public class PrintJobService {
 
         // Set the highest priority (1)
         jobToPrioritize.setPriority(1);
-        savePrintJob(jobToPrioritize);
+        savePrintJob(jobToPrioritize);  // Save the prioritized job immediately
 
-        // Retrieve and reorder other jobs in the queue
+        // Retrieve and reorder other jobs in the queue, excluding the one just prioritized
         List<PrintJob> jobs = printJobRepository.findByStatusOrderByPriorityAsc(PrintJobStatus.QUEUED);
-        int currentPriority = 2;
+        int currentPriority = 2;  // Start from the next priority after the highest
+
+        // Reorder jobs in the queue to ensure no conflicts
         for (PrintJob job : jobs) {
             if (!job.getId().equals(jobId) && (job.getPriority() == null || job.getPriority() != currentPriority)) {
                 job.setPriority(currentPriority++);
             }
         }
 
+        // Save the reordered jobs in batch (only once)
+        printJobRepository.saveAll(jobs);  // Save all updated jobs
 
-        printJobRepository.saveAll(jobs); // Save updated jobs in batch
-        logJobAction(jobId, PrintJobStatus.QUEUED, "Job prioritized by Admin",Optional.empty());
-        messagingTemplate.convertAndSend("/topic/job-queue", jobs); // Broadcast updated queue
-
-        // Save the reordered jobs
-        printJobRepository.saveAll(jobs);
-
-        // Get the current user ID
-        Long currentUserId = getCurrentUserId();
-
-        // Log the prioritization action with priority details in the description
+        // Log the prioritization action with previous and new priority details
+        Long currentUserId = getCurrentUserId();  // Get the current user ID
         String description = "Job prioritized by Admin. Previous priority: " + 
-                             (previousPriority != null ? previousPriority : "none") +
+                             (previousPriority != null ? previousPriority : "none") + 
                              ", New priority: 1";
-        logJobAction(jobId, null, null, currentUserId, description);
+        
+        logJobAction(jobId, PrintJobStatus.QUEUED, PrintJobStatus.QUEUED, currentUserId, description, Optional.of(jobToPrioritize.getUserName()));
 
-        // Broadcast the updated job queue via WebSocket
-        messagingTemplate.convertAndSend("/topic/job-queue", jobs);
-
+        // Broadcast the updated job queue via WebSocket (only once)
+        messagingTemplate.convertAndSend("/topic/job-queue", jobs); // Broadcast updated queue
     }
+
 
     
     
 
     public void cancelJob(Long jobId) {
-    PrintJob printJob = findJobIfAuthorized(jobId);
+        // Retrieve the job and ensure the user has authorization
+        PrintJob printJob = findJobIfAuthorized(jobId);
 
-    // Ensure only jobs that are not COMPLETED or DELETED can be canceled
-    if (printJob.getStatus() == PrintJobStatus.COMPLETED || printJob.getStatus() == PrintJobStatus.DELETED) {
-        throw new IllegalStateException("Cannot cancel a job that is already completed or deleted.");
+        // Ensure only jobs that are not COMPLETED or DELETED can be canceled
+        if (printJob.getStatus() == PrintJobStatus.COMPLETED || printJob.getStatus() == PrintJobStatus.DELETED) {
+            throw new IllegalStateException("Cannot cancel a job that is already completed or deleted.");
+        }
+
+        // Capture the previous status before updating
+        PrintJobStatus previousStatus = printJob.getStatus();
+
+        // Update the job status to DELETED
+        printJob.setStatus(PrintJobStatus.DELETED);
+        savePrintJob(printJob); // Save the job status change
+
+        // Log the job cancellation action with previous and new status
+        Long currentUserId = getCurrentUserId(); // Get the ID of the user canceling the job
+        logJobAction(jobId, previousStatus, PrintJobStatus.DELETED, currentUserId, "Job canceled by user", Optional.empty());
     }
-
-    // Capture the previous status before updating
-    PrintJobStatus previousStatus = printJob.getStatus();
-
-    // Update the job status to DELETED
-    printJob.setStatus(PrintJobStatus.DELETED);
-    savePrintJob(printJob); // Save the job status change
-
-    // Log the job cancellation action with previous and new status
-    Long currentUserId = getCurrentUserId(); // Get the ID of the user canceling the job
-    logJobAction(jobId, previousStatus, PrintJobStatus.DELETED, currentUserId, "Job canceled by user");
-
-    
-}
 
     
 
@@ -367,7 +376,7 @@ public class PrintJobService {
 
             // Log the job pause action with previous and new status
             Long currentUserId = getCurrentUserId(); // Get the ID of the user pausing the job
-            logJobAction(jobId, previousStatus, PrintJobStatus.PAUSED, currentUserId, "Job paused by user");
+            logJobAction(jobId, previousStatus, PrintJobStatus.PAUSED, currentUserId, "Job paused by user", Optional.ofNullable(job.getUserName()));
 
         } else {
             throw new IllegalStateException("Job can only be paused if it is in PRINTING or QUEUED status.");
@@ -386,7 +395,7 @@ public class PrintJobService {
 
         // Log the action with previous and new status details
         Long currentUserId = getCurrentUserId();
-        logJobAction(jobId, previousStatus, PrintJobStatus.FAVORITE, currentUserId, "Job marked as favorite by user");
+        logJobAction(jobId, previousStatus, PrintJobStatus.FAVORITE, currentUserId, "Job marked as favorite", Optional.ofNullable(job.getUserName()));
     }
 
 
@@ -411,35 +420,25 @@ public class PrintJobService {
 
         // Log the resume action with previous and new status details
         Long currentUserId = getCurrentUserId();
-        logJobAction(jobId, previousStatus, PrintJobStatus.READY, currentUserId, "Job resumed by user");
+        logJobAction(jobId, previousStatus, PrintJobStatus.READY, currentUserId, "Job resumed by user", Optional.empty());
     }
 
+
+     
     
-    
-   
-    
+    public void logJobAction(Long jobId,  PrintJobStatus previousStatus, PrintJobStatus updatedStatus, Long userId,  String comments,  Optional<String> userName) {
+    		JobHistory history = new JobHistory();
+    		history.setPrintJobId(jobId);
+    		history.setPreviousStatus(previousStatus);
+    		history.setUpdatedStatus(updatedStatus);
+    		history.setUserId(userId);
+    		history.setTimestamp(LocalDateTime.now());
+    		userName.ifPresent(history::setUserName);
+    		history.setComments(comments);
 
-    public void logJobAction(Long jobId, PrintJobStatus status, String actionDescription,Optional<String> userName) {
-
-
-    private void logJobAction(Long jobId, PrintJobStatus previousStatus, PrintJobStatus updatedStatus, Long userId, String comments) {
-
-        JobHistory history = new JobHistory();
-        history.setPrintJobId(jobId);
-        history.setPreviousStatus(previousStatus);  // Ensure JobHistory has fields for previous and updated status
-        history.setUpdatedStatus(updatedStatus);
-        history.setUserId(userId);  // Store the ID of the user making the change
-        history.setTimestamp(LocalDateTime.now());
-
-       // history.setUserName(userName);
-        userName.ifPresent(history::setUserName);
-
-    	jobHistoryRepository.save(history); // Save the log entry
-
-        history.setComments(comments);
-        jobHistoryRepository.save(history); // Save the log entry
-
+    		jobHistoryRepository.save(history);  // Save the log entry
     }
+
 
     // Method to log status change
     public void logStatusChange(Long jobId, PrintJobStatus previousStatus, PrintJobStatus updatedStatus, String comments) {
@@ -461,18 +460,21 @@ public class PrintJobService {
     
 
     @Transactional
-    public List<JobHistory> getFilteredPrintJobs(PrintJobStatus status,String userName){
-    	 List<JobHistory> jobs = null;
+    public List<JobHistory> getFilteredPrintJobs(PrintJobStatus status, String userName) {
+        List<JobHistory> jobs = null;
 
-         if (status != null) {
-             jobs = jobHistoryRepository.findByStatus(status);
-         } else if (userName != null) {
-             jobs = jobHistoryRepository.findByUserName(userName);
-         }
+        // Filter by updatedStatus if status is provided
+        if (status != null) {
+            jobs = jobHistoryRepository.findByUpdatedStatus(status);
+        } 
+        // Filter by userName if provided
+        else if (userName != null) {
+            jobs = jobHistoryRepository.findByUserName(userName);
+        }
 
-		return jobs;
-    	
+        return jobs;
     }
+
     
     
 
@@ -509,10 +511,10 @@ public class PrintJobService {
 
         return jobs;
     }
+    
 
     
     
-}
   
     public PrintJob findJobIfAuthorized(Long jobId) {
         PrintJob job = printJobRepository.findById(jobId)
@@ -558,19 +560,24 @@ public class PrintJobService {
     }
     
     public void addJob(PrintJobRequest jobRequest) {
+        // Create a new PrintJob object and set its properties from the jobRequest
         PrintJob job = new PrintJob();
-        job.setStatus(PrintJobStatus.QUEUED);
-        job.setUserId(jobRequest.getUserId());
-        job.setDescription(jobRequest.getDescription());
-        job.setQueuePosition(getNextQueuePosition());
+        job.setStatus(PrintJobStatus.QUEUED);  // Set the job status to QUEUED
+        job.setUserId(jobRequest.getUserId()); // Set the user ID for the job
+        job.setDescription(jobRequest.getDescription());  // Set the job description
+        job.setQueuePosition(getNextQueuePosition());  // Set the queue position for the job
 
         // Save the new job in the repository
         printJobRepository.save(job);
 
-        // Log the job addition action with relevant details
+        // Get the current user's ID to log the action
         Long currentUserId = getCurrentUserId();
-        logJobAction(job.getId(), null, PrintJobStatus.QUEUED, currentUserId, "Job added to the queue");
+        
+        // Log the action for adding the job with relevant details (no previous status)
+        String actionDescription = "Job added to the queue";
+        logJobAction(job.getId(), null, PrintJobStatus.QUEUED, currentUserId, actionDescription, Optional.of(jobRequest.getUserId().toString()));
     }
+
 
 
     private int getNextQueuePosition() {
@@ -684,8 +691,10 @@ public class PrintJobService {
         printJobRepository.delete(printJob);
 
         // Log the job removal with previous and new status
-        logJobAction(jobId, previousStatus, PrintJobStatus.DELETED, getCurrentUserId(), "Job permanently removed from the database");
+        Long currentUserId = getCurrentUserId();
+        logJobAction(jobId, previousStatus, PrintJobStatus.DELETED, currentUserId, "Job permanently removed from the database", Optional.empty());
     }
+
 
     
     
@@ -697,5 +706,6 @@ public class PrintJobService {
 
     
     
-}
+    }
+    
 

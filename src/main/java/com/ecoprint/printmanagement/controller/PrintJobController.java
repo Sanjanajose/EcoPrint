@@ -23,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,6 +51,7 @@ import org.springframework.security.core.Authentication;
 
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
@@ -212,33 +214,42 @@ public class PrintJobController {
     }
     
 
+    
+    
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @Operation(summary = "Export Print Job Logs to Excel", description = "Exports the print job logs to an Excel file for admins.")
     @GetMapping("/export/excel")
     public void exportLogsToExcel(HttpServletResponse response) throws IOException {
         response.setContentType("application/vnd.ms-excel");
         response.setHeader("Content-Disposition", "attachment; file=print_job_logs.xlsx");
+
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Logs");
 
+        // Create header row
         Row headerRow = sheet.createRow(0);
         headerRow.createCell(0).setCellValue("Job ID");
-        headerRow.createCell(1).setCellValue("Status");
-        headerRow.createCell(2).setCellValue("Timestamp");
+        headerRow.createCell(1).setCellValue("Previous Status");
+        headerRow.createCell(2).setCellValue("Updated Status");
+        headerRow.createCell(3).setCellValue("Timestamp");
 
         int rowIdx = 1;
         List<JobHistory> jobHistory = printJobService.getAllLogs();
 
+        // Populate rows with job history data
         for (JobHistory log : jobHistory) {
             Row row = sheet.createRow(rowIdx++);
             row.createCell(0).setCellValue(log.getPrintJobId());
-            row.createCell(1).setCellValue(log.getStatus().toString());
-            row.createCell(2).setCellValue(log.getTimestamp().toString());
+            row.createCell(1).setCellValue(log.getPreviousStatus() != null ? log.getPreviousStatus().toString() : "N/A");  // Safe null check
+            row.createCell(2).setCellValue(log.getUpdatedStatus() != null ? log.getUpdatedStatus().toString() : "N/A");  // Safe null check
+            row.createCell(3).setCellValue(log.getTimestamp() != null ? log.getTimestamp().toString() : "N/A");  // Safe null check
         }
 
+        // Write the data to the response output stream
         workbook.write(response.getOutputStream());
         workbook.close();
     }
+
     
                           
         @GetMapping("/dashboard/filter")
