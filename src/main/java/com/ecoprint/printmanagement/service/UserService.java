@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
@@ -183,10 +184,13 @@ public class UserService {
         activityLogService.logRoleChange(userId, roleName, "Role removed");
 
         // Update permissions
+        // Update permissions with null check on RolePermissionMapping
         Set<Permission> updatedPermissions = user.getRoles().stream()
-                .flatMap(r -> RolePermissionMapping.rolePermissions.get(r.getRole()).stream())
+                .flatMap(r -> {
+                    Set<Permission> permissions = RolePermissionMapping.rolePermissions.get(r.getRole());
+                    return permissions != null ? permissions.stream() : Stream.empty();
+                })
                 .collect(Collectors.toSet());
-        user.setPermissions(updatedPermissions);
 
         return userRepository.save(user);
     }
@@ -278,7 +282,6 @@ public class UserService {
 
         return user;
     }
-
 
 
     private boolean currentUserHasPermissionToAssign(Authentication authentication, String roleName) {

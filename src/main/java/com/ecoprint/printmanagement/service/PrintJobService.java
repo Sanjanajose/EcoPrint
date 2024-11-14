@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,8 +15,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Sort;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
@@ -33,6 +36,8 @@ import com.ecoprint.printmanagement.repository.UserRepository;
 
 import org.springframework.security.access.AccessDeniedException;
 
+
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class PrintJobService {
@@ -65,6 +70,9 @@ public class PrintJobService {
         
     }
 
+
+    // Method to upload file and create a new job
+    @Transactional
  // Method to upload file and create a new job
   /**  public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost) throws IOException {
         if (file == null || file.isEmpty()) {
@@ -106,6 +114,7 @@ public class PrintJobService {
     
     
     
+
     public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
@@ -136,13 +145,19 @@ public class PrintJobService {
         printJob.setStatus(PrintJobStatus.SUBMITTED);
         printJob.setSubmittedAt(LocalDateTime.now());
 
+
         printJobRepository.save(printJob);
+
+      // Log job submission
+       logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, "Job submitted by user",Optional.of(printJob.getUserName()));
+
 
         // Retrieve current user ID for logging
         Long currentUserId = getCurrentUserId();
 
         // Log job submission
         logJobAction(printJob.getId(), null, PrintJobStatus.SUBMITTED, currentUserId, "Job submitted by user");
+
     }
 
 
@@ -231,6 +246,9 @@ public class PrintJobService {
         // Save the updated print job
         savePrintJob(printJob);
 
+        logJobAction(jobId, status, comments,Optional.of(printJob.getUserName()));
+
+
         // Get the current user ID
         Long currentUserId = getCurrentUserId();
 
@@ -244,6 +262,7 @@ public class PrintJobService {
             pushNotificationService.sendPushNotification("Job Status Alert", message);
             logNotification("sanjanajose97@gmail.com", message);
         }
+
     }
 
 
@@ -286,6 +305,11 @@ public class PrintJobService {
             }
         }
 
+
+        printJobRepository.saveAll(jobs); // Save updated jobs in batch
+        logJobAction(jobId, PrintJobStatus.QUEUED, "Job prioritized by Admin",Optional.empty());
+        messagingTemplate.convertAndSend("/topic/job-queue", jobs); // Broadcast updated queue
+
         // Save the reordered jobs
         printJobRepository.saveAll(jobs);
 
@@ -300,6 +324,7 @@ public class PrintJobService {
 
         // Broadcast the updated job queue via WebSocket
         messagingTemplate.convertAndSend("/topic/job-queue", jobs);
+
     }
 
     
@@ -393,15 +418,27 @@ public class PrintJobService {
     
    
     
+
+    public void logJobAction(Long jobId, PrintJobStatus status, String actionDescription,Optional<String> userName) {
+
+
     private void logJobAction(Long jobId, PrintJobStatus previousStatus, PrintJobStatus updatedStatus, Long userId, String comments) {
+
         JobHistory history = new JobHistory();
         history.setPrintJobId(jobId);
         history.setPreviousStatus(previousStatus);  // Ensure JobHistory has fields for previous and updated status
         history.setUpdatedStatus(updatedStatus);
         history.setUserId(userId);  // Store the ID of the user making the change
         history.setTimestamp(LocalDateTime.now());
+
+       // history.setUserName(userName);
+        userName.ifPresent(history::setUserName);
+
+    	jobHistoryRepository.save(history); // Save the log entry
+
         history.setComments(comments);
         jobHistoryRepository.save(history); // Save the log entry
+
     }
 
     // Method to log status change
@@ -416,6 +453,67 @@ public class PrintJobService {
         jobHistoryRepository.save(history);
     }
     
+
+    public List<JobHistory> getAllLogs() {
+        return jobHistoryRepository.findAll();
+    }
+    
+    
+
+    @Transactional
+    public List<JobHistory> getFilteredPrintJobs(PrintJobStatus status,String userName){
+    	 List<JobHistory> jobs = null;
+
+         if (status != null) {
+             jobs = jobHistoryRepository.findByStatus(status);
+         } else if (userName != null) {
+             jobs = jobHistoryRepository.findByUserName(userName);
+         }
+
+		return jobs;
+    	
+    }
+    
+    
+
+    
+    @Transactional
+    public List<JobHistory> getSortedPrintJobs(String sortBy, boolean sortByTime, String sortOrder,String userName) {
+        List<JobHistory> jobs = jobHistoryRepository.findAll(); // Fetch all records
+
+        if (sortByTime) {
+            jobs.sort((job1, job2) -> {
+                JobHistory latestHistory1 = jobHistoryRepository.findTopByPrintJobIdOrderByTimestampDesc(job1.getPrintJobId());
+                JobHistory latestHistory2 = jobHistoryRepository.findTopByPrintJobIdOrderByTimestampDesc(job2.getPrintJobId());
+
+                // Check for null values to avoid NullPointerException
+                if (latestHistory1 == null && latestHistory2 == null) {
+                    return 0;
+                } else if (latestHistory1 == null) {
+                    return 1; // Treat null as greater to place it at the end
+                } else if (latestHistory2 == null) {
+                    return -1; // Treat null as greater to place it at the end
+                } else {
+                    int comparison = latestHistory1.getTimestamp().compareTo(latestHistory2.getTimestamp());
+                    // Reverse the order if descending
+                    return "desc".equalsIgnoreCase(sortOrder) ? -comparison : comparison;
+                }
+            });
+        } else {
+            // Optional: Sort by another field if sortByTime is false
+            jobs.sort((job1, job2) -> {
+                int comparison = job1.getTimestamp().compareTo(job2.getTimestamp());
+                return "desc".equalsIgnoreCase(sortOrder) ? -comparison : comparison;
+            });
+        }
+
+        return jobs;
+    }
+
+    
+    
+}
+  
     public PrintJob findJobIfAuthorized(Long jobId) {
         PrintJob job = printJobRepository.findById(jobId)
             .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
@@ -600,3 +698,4 @@ public class PrintJobService {
     
     
 }
+

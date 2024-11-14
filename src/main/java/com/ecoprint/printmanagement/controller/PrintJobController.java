@@ -3,10 +3,16 @@ package com.ecoprint.printmanagement.controller;
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,21 +23,34 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
 
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.JobStatusMessage;
+import com.ecoprint.printmanagement.model.PrintJob;
+import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.service.NotificationService;
 import com.ecoprint.printmanagement.service.PrintJobService;
+import org.springframework.security.core.Authentication;
+
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/print-jobs")
@@ -192,6 +211,69 @@ public class PrintJobController {
         return ResponseEntity.ok(queuedJobs);
     }
     
+
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Operation(summary = "Export Print Job Logs to Excel", description = "Exports the print job logs to an Excel file for admins.")
+    @GetMapping("/export/excel")
+    public void exportLogsToExcel(HttpServletResponse response) throws IOException {
+        response.setContentType("application/vnd.ms-excel");
+        response.setHeader("Content-Disposition", "attachment; file=print_job_logs.xlsx");
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Logs");
+
+        Row headerRow = sheet.createRow(0);
+        headerRow.createCell(0).setCellValue("Job ID");
+        headerRow.createCell(1).setCellValue("Status");
+        headerRow.createCell(2).setCellValue("Timestamp");
+
+        int rowIdx = 1;
+        List<JobHistory> jobHistory = printJobService.getAllLogs();
+
+        for (JobHistory log : jobHistory) {
+            Row row = sheet.createRow(rowIdx++);
+            row.createCell(0).setCellValue(log.getPrintJobId());
+            row.createCell(1).setCellValue(log.getStatus().toString());
+            row.createCell(2).setCellValue(log.getTimestamp().toString());
+        }
+
+        workbook.write(response.getOutputStream());
+        workbook.close();
+    }
+    
+                          
+        @GetMapping("/dashboard/filter")
+        @Operation(summary = "Get Dashboard Print Jobs by Filter",
+        	    description = "Retrieve a list of print jobs based on optional filters such as job status and username. Allows filtering by print job status and user who initiated the job.")
+        @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+        public ResponseEntity<List<JobHistory>> getDashboardDataByFilters(
+                @RequestParam(required = false) PrintJobStatus status,
+                @RequestParam(required = false) String userName) {    	        	       	
+            if (status != null && !EnumSet.allOf(PrintJobStatus.class).contains(status)) {
+                return ResponseEntity.badRequest().body(Collections.emptyList()); // Return an empty list
+            }
+            List<JobHistory> jobs = printJobService.getFilteredPrintJobs(status,userName);
+            return ResponseEntity.ok(jobs);
+        }
+    
+       
+        @GetMapping("/dashboard/sort")
+        @Operation(summary = "Get Dashboard Print Jobs by Sorting",
+        	    description = "Retrieve a sorted list of print jobs based on optional parameters such as sort field and order. Sorts print jobs for the logged-in user by a specified attribute and order.")
+        @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+        public ResponseEntity<List<JobHistory>> getDashboardDataBySort(
+                @RequestParam(defaultValue = "createdAt") String sortBy,
+        	    @RequestParam(defaultValue = "false") boolean sortByTime,
+        	    @RequestParam(required = false) String sortOrder,
+        	    Authentication authentication) {    	       	        	       	
+           // Get the current logged-in username
+           String currentUsername = authentication.getName();
+           // Fetch sorted jobs for the specific user
+           List<JobHistory> jobs = printJobService.getSortedPrintJobs(sortBy, sortByTime, sortOrder, currentUsername);
+
+            return ResponseEntity.ok(jobs);
+        }
+
+
     @PostMapping
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> addJob(@RequestBody PrintJobRequest jobRequest) {
@@ -212,10 +294,7 @@ public class PrintJobController {
         printJobService.reorderJob(jobId, newPosition);
         return ResponseEntity.ok("Print job reordered");
     }
-    
-    
-    
-    
+  
 
 
 }

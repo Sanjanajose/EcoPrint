@@ -264,6 +264,9 @@ public class UserController {
 
         return ResponseEntity.ok(new ApiResponse(true, "Profile updated successfully."));
     }
+
+   @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
+
     
     @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
     @PostMapping("/{userId}/assignRoles")
@@ -275,12 +278,17 @@ public class UserController {
         userService.assignRolesToUser(userId, roleAssignmentRequest.getRoleNames());
 
         return ResponseEntity.ok(new ApiResponse(true, "Roles assigned successfully"));
+
+    }    
+
     }
 
 
 
+
     
-    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
+    
+    @PreAuthorize("hasRole('ROLE_SUPERADMIN')")
     @DeleteMapping("/{userId}/deleteRole")
     public ResponseEntity<ApiResponse> deleteUserRole(
             @PathVariable Long userId,
@@ -292,7 +300,7 @@ public class UserController {
         return ResponseEntity.ok(new ApiResponse(true, "Role removed successfully"));
     }
 
-    
+  
 
     
     
