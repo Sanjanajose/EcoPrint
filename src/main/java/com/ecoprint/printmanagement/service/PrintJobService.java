@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.service;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,16 +15,21 @@ import org.apache.tika.Tika;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Sort;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ecoprint.printmanagement.exception.NetworkException;
+import com.ecoprint.printmanagement.exception.PrinterException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+import com.ecoprint.printmanagement.model.FailureReason;
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.NotificationLog;
 import com.ecoprint.printmanagement.model.PrintJob;
@@ -42,6 +48,17 @@ import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class PrintJobService {
+    @Value("${retry.maxRetryCount:3}")
+    private int maxRetryCount;
+
+    @Value("${retry.interval.network:PT1M}") // Default 1 minute for network issues
+    private String retryNetworkInterval;
+
+    @Value("${retry.interval.printer:PT5M}") // Default 5 minutes for printer issues
+    private String retryPrinterInterval;
+
+    @Value("${retry.interval.default:PT2M}") // Default interval for other cases
+    private String defaultRetryInterval;
 
     private static final Logger logger = LoggerFactory.getLogger(PrintJobService.class);
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -621,11 +638,10 @@ public class PrintJobService {
 
         // Ensure updatedStatus is never null
         PrintJobStatus updatedStatus = job.getStatus();  // Assuming job.getStatus() returns PrintJobStatus
-
         if (updatedStatus == null) {
-            updatedStatus = PrintJobStatus.UNKNOWN;  // Set to a default enum value
-        }
-
+        	updatedStatus = PrintJobStatus.UNKNOWN;  // Set to a default enum value
+        	}
+       
         jobHistory.setUpdatedStatus(updatedStatus);  // Set the status as PrintJobStatus enum
   // Ensure updatedStatus is always set
 
@@ -720,6 +736,89 @@ public class PrintJobService {
 	    return responseList;
 	}
    
+ 
+      
+   
+   
+   public void processPrintJob(PrintJob job) {
+	    try {
+	        updateJobStatus(job.getId(), PrintJobStatus.QUEUED, "Print job added to queue");
+	             
+	        if (job.hasNetworkConnectivityIssues()) {
+	            throw new NetworkException("Network connectivity issue detected");
+	        } else if (job.hasPrinterHardwareIssues()) {
+	            throw new PrinterException("Printer hardware issue detected");
+	        }
+
+
+	        // Additional job processing logic
+
+	    } catch (NetworkException e) {
+	        handleJobFailure(job, FailureReason.NETWORK_ISSUE);
+	    } catch (PrinterException e) {
+	        handleJobFailure(job, FailureReason.PRINTER_ERROR);
+	    } catch (Exception e) {
+	        handleJobFailure(job, FailureReason.UNKNOWN_ERROR);
+	    }
+	}
+
+
+   
+ 
+  
+   
+   public boolean retryFailedJobById(Long jobId) {
+	    // Find the job by its ID
+	    Optional<PrintJob> optionalJob = printJobRepository.findById(jobId);
+	    
+	    if (optionalJob.isPresent()) {
+	        PrintJob job = optionalJob.get();
+	        
+	        // Check if the job is in a FAILED state and is eligible for retry
+	        if (job.getStatus() == PrintJobStatus.FAILED && job.getRetryCount() < maxRetryCount) {
+	            // Increment retry count and set status to RETRYING
+	            job.incrementRetryCount();
+	            job.setStatus(PrintJobStatus.QUEUED);
+	            printJobRepository.save(job);         
+	            // Attempt to process the job again
+	            processPrintJob(job);
+	            return true; // Retry was successfully triggered
+	        }
+	    }
+	    
+	    return false; // Job not found or not eligible for retry
+	}
+
+
+   public void handleJobFailure(PrintJob job, FailureReason failureReason) {
+	    // Increment retry count
+	    job.setRetryCount(job.getRetryCount() + 1);
+	    
+	    // Set job status to FAILED if retry limit reached, otherwise RETRYING
+	    if (job.getRetryCount() >= maxRetryCount) {
+	        job.setStatus(PrintJobStatus.FAILED);
+	       // sendAlert(job);  // Optional: Send alert if max retries reached
+	    } else {
+	        job.setStatus(PrintJobStatus.QUEUED);	        
+	        // Set failure reason
+	        job.setFailureReason(failureReason);	        
+	        // Calculate the next retry time based on failure reason
+	        Duration retryInterval;
+	        switch (failureReason) {
+	            case NETWORK_ISSUE:
+	                retryInterval = Duration.parse(retryNetworkInterval);
+	                break;
+	            case PRINTER_ERROR:
+	                retryInterval = Duration.parse(retryPrinterInterval);
+	                break;
+	            default:
+	                retryInterval = Duration.parse(defaultRetryInterval);
+	        }
+	        job.setNextRetryTime(LocalDateTime.now().plus(retryInterval));
+	    }	    
+	    // Save the job's updated state to the database
+	   // jobRepository.save(job);
+	}
     
     }
     

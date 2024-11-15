@@ -318,6 +318,17 @@ public class PrintJobController {
         return ResponseEntity.ok(readyJobs);
     }
  
+    @PostMapping("/retry-failed-jobs/{jobId}")
+    public ResponseEntity<String> retryFailedJobById(@PathVariable Long jobId) {
+    	boolean retrySuccess = printJobService.retryFailedJobById(jobId);
+    
+    if (retrySuccess) {
+        return ResponseEntity.ok("Retry process triggered for job ID: " + jobId);
+    } else {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job ID " + jobId + " not found or not eligible for retry.");
+    }
+    }
+
 
 
 }

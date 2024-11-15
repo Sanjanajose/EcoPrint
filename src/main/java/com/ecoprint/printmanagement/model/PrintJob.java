@@ -54,6 +54,8 @@ public class PrintJob {
 
     @Column
     private Integer priority;
+    
+
 
     // Print Details
     @NotNull(message = "Pages printed is mandatory")
@@ -106,7 +108,21 @@ public class PrintJob {
     @Column(name = "paper_size")
     private String paperSize;
     
+    private int retryCount;
 
+    @Enumerated(EnumType.STRING)
+    private FailureReason failureReason;
+
+    private LocalDateTime nextRetryTime;
+    
+    private boolean networkIssue;
+    
+    private boolean printerError;
+    
+    public void incrementRetryCount() {
+        this.retryCount++;
+    }
+        
 
 
     // Constructors
@@ -225,7 +241,55 @@ public class PrintJob {
 	public void setQueuePosition(Integer queuePosition) {
 		this.queuePosition = queuePosition;
 	}
+
+	public int getRetryCount() {
+		return retryCount;
+	}
+
+	public void setRetryCount(int retryCount) {
+		this.retryCount = retryCount;
+	}
+
+	public FailureReason getFailureReason() {
+		return failureReason;
+	}
+
+	public void setFailureReason(FailureReason failureReason) {
+		this.failureReason = failureReason;
+	}
+
+	public LocalDateTime getNextRetryTime() {
+		return nextRetryTime;
+	}
+
+	public void setNextRetryTime(LocalDateTime nextRetryTime) {
+		this.nextRetryTime = nextRetryTime;
+	}
+
+	public boolean isNetworkIssue() {
+		return networkIssue;
+	}
+
+	public void setNetworkIssue(boolean networkIssue) {
+		this.networkIssue = networkIssue;
+	}
+
+	public boolean isPrinterError() {
+		return printerError;
+	}
+
+	public void setPrinterError(boolean printerError) {
+		this.printerError = printerError;
+	}
     
-    
+	public boolean hasNetworkConnectivityIssues() {
+        // Will be Implementing  logic to detect network issues once connected with printer, for now using a flag for simulating the logic
+        return false; // will be changing this flags for testing purpose
+    }
+
+    public boolean hasPrinterHardwareIssues() {
+        // Will be Implementing  logic to detect network issues once connected with printer, for now using a flag for simulating the logic
+        return false; // will be changing this flags for testing purpose
+    }
 
 }
