@@ -2,6 +2,7 @@ package com.ecoprint.printmanagement.service;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -150,10 +151,7 @@ public class PrintJobService {
         printJob.setPaperSize(paperSize);
         printJob.setStatus(PrintJobStatus.SUBMITTED);
         printJob.setSubmittedAt(LocalDateTime.now());
-
         printJobRepository.save(printJob);
-
-        // Log job submission
         Long currentUserId = getCurrentUserId();
         logJobAction(printJob.getId(), PrintJobStatus.SUBMITTED, PrintJobStatus.SUBMITTED, currentUserId, "Job submitted by user", Optional.of(printJob.getUserName()));
     }
@@ -701,13 +699,27 @@ public class PrintJobService {
 
     
     
-    private PrintJob getJob(Long jobId) {
+   private PrintJob getJob(Long jobId) {
         return printJobRepository.findById(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
     }
 
 
-    
+   public List<PrintJob> getReadyJobs() {
+	    List<PrintJob> readyJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
+	    List<PrintJob> responseList = new ArrayList<>();
+	    for (PrintJob job : readyJobs) {
+	        if (job.getId() == null || job.getId() == 0) {
+	            throw new IllegalArgumentException("Invalid job ID: " + job.getId());
+	        }	        
+	        PrintJob printJob = new PrintJob();
+	        printJob.setId(job.getId());
+	        printJob.setFileName(job.getFileName());	        
+	        responseList.add(printJob);
+	    }
+	    return responseList;
+	}
+   
     
     }
     

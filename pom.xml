@@ -124,6 +124,13 @@
     <version>5.2.3</version>
 </dependency>
 
+<dependency>
+    <groupId>com.hp.oxpd2</groupId>
+    <artifactId>oxpd2lib</artifactId>
+    <version>1.0</version>
+    <scope>compile</scope>
+</dependency>
+
     </dependencies>
     <build>
         <plugins>

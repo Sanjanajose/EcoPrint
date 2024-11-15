@@ -296,6 +296,7 @@ public class PrintJobController {
     }
     
     
+    
     @PutMapping("/jobs/{jobId}/resume")
     public ResponseEntity<String> resumeJob(@PathVariable Long jobId) {
         printJobService.resumeJob(jobId);
@@ -309,6 +310,14 @@ public class PrintJobController {
         return ResponseEntity.ok("Print job reordered");
     }
   
+    @GetMapping("/ready-jobs")
+    @Operation(summary = "Get Ready Jobs",
+               description = "Retrieve a list of jobs that are ready to print with estimated wait times.")
+    public ResponseEntity<List<PrintJob>> getReadyJobs() {
+        List<PrintJob> readyJobs = printJobService.getReadyJobs();
+        return ResponseEntity.ok(readyJobs);
+    }
+ 
 
 
 }

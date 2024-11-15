@@ -21,5 +21,8 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
     
     @Query("SELECT p FROM PrintJob p WHERE p.queuePosition BETWEEN :start AND :end ORDER BY p.queuePosition")
     List<PrintJob> findByQueuePositionBetween(@Param("start") int start, @Param("end") int end);
+    
+    List<PrintJob> findByStatus(PrintJobStatus status);
+
 
 }

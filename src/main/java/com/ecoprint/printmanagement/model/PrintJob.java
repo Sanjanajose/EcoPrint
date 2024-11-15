@@ -49,7 +49,8 @@ public class PrintJob {
 
     // Queue Management
     @Column
-    private int queuePosition;
+    private Integer queuePosition; 
+
 
     @Column
     private Integer priority;
@@ -104,6 +105,8 @@ public class PrintJob {
 
     @Column(name = "paper_size")
     private String paperSize;
+    
+
 
 
     // Constructors
@@ -138,8 +141,6 @@ public class PrintJob {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
-    public int getQueuePosition() { return queuePosition; }
-    public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
 
     public Integer getPriority() { return priority; }
     public void setPriority(Integer priority) { this.priority = priority; }
@@ -215,6 +216,14 @@ public class PrintJob {
 
 	public void setPaperSize(String paperSize) {
 		this.paperSize = paperSize;
+	}
+
+	public Integer getQueuePosition() {
+		return queuePosition;
+	}
+
+	public void setQueuePosition(Integer queuePosition) {
+		this.queuePosition = queuePosition;
 	}
     
     
