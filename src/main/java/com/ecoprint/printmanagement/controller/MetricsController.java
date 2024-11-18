@@ -21,6 +21,8 @@ import com.ecoprint.printmanagement.model.UserActivity;
 import com.ecoprint.printmanagement.service.PerformanceMetricService;
 import com.ecoprint.printmanagement.service.UserActivityService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 @RestController
 @RequestMapping("/api/metrics")
 public class MetricsController {
@@ -33,6 +35,7 @@ public class MetricsController {
 
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/activity/{userId}")
+    @Operation(summary = "allows ADMIN to get the list of activities between a time frame for a user ")
     public ResponseEntity<List<UserActivity>> getUserActivities(
             @PathVariable Long userId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
@@ -48,6 +51,7 @@ public class MetricsController {
 
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/performance/{userId}")
+    @Operation(summary = "allows ADMIN to get the performance metrics of a user between a timeframe ")
     public List<PerformanceMetric> getUserPerformance(
             @PathVariable Long userId, 
             @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start, 

@@ -28,8 +28,10 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
  // Fetch jobs by a list of statuses
     List<PrintJob> findAllByStatusIn(List<PrintJobStatus> statuses);
 
-    public Optional<PrintJob> findByFileName(String fileName);
+   
+    // Find PrintJob by file name
+    Optional<PrintJob> findByFileName(String fileName);
 
-
+    
 
 }

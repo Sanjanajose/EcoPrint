@@ -3,12 +3,15 @@ package com.ecoprint.printmanagement.controller;
 import com.ecoprint.printmanagement.model.ActivityLog;
 import com.ecoprint.printmanagement.service.ActivityLogService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,11 +31,15 @@ public class ActivityLogController {
     private ActivityLogService activityLogService;
 
     @GetMapping("/activity")
+    @PreAuthorize("hasRole('ROLE_SUPERADMIN') or hasRole('ROLE_ADMIN')")
+    @Operation(summary = "allows ADMIN or SUPER ADMIN to get the list of all the logs ")
     public List<ActivityLog> getAllActivityLogs() {
         return activityLogService.getAllLogs(); // Ensure getAllLogs() is implemented in ActivityLogService
     }
 
     @GetMapping("/user/{userId}")
+    @PreAuthorize("hasRole('ROLE_SUPERADMIN') or hasRole('ROLE_ADMIN')")
+    @Operation(summary = "allows ADMIN or SUPER ADMIN to get the list of all the logs for a particular user")
     public ResponseEntity<Page<ActivityLog>> getActivitiesByUser(
         @PathVariable Long userId,
         @RequestParam(defaultValue = "0") int page,
@@ -43,6 +50,8 @@ public class ActivityLogController {
     }
 
     @GetMapping("/range")
+    @PreAuthorize("hasRole('ROLE_SUPERADMIN') or hasRole('ROLE_ADMIN')")
+    @Operation(summary = "allows ADMIN or SUPER ADMIN to get the list of all the activities within a time range")
     public ResponseEntity<List<ActivityLog>> getActivitiesWithinTimeRange(
         @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
         @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
@@ -51,6 +60,7 @@ public class ActivityLogController {
     }
     
     @GetMapping("/metrics/{userId}")
+    @Operation(summary = "allows to get the list of all the print jobs handled by a user")
     public ResponseEntity<Map<String, Long>> getProductivityMetrics(@PathVariable Long userId) {
         Map<String, Long> metrics = new HashMap<>();
         metrics.put("totalPrintJobsHandled", activityLogService.getTotalPrintJobsHandled(userId));

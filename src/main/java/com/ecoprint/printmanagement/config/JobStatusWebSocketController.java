@@ -5,6 +5,9 @@ package com.ecoprint.printmanagement.config;
 import com.ecoprint.printmanagement.model.JobStatusMessage;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.service.PrintJobService;
+
+import io.swagger.v3.oas.annotations.Operation;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +26,7 @@ public class JobStatusWebSocketController {
     private PrintJobService printJobService;
 
     @PostMapping("/api/print-jobs/update-status")
+    @Operation(summary = "allows to update the print jobs in real time via web sockets ")
     public ResponseEntity<String> updateJobStatus(@RequestParam Long jobId, @RequestParam PrintJobStatus status, @RequestParam String comments) {
         try {
             // Log the incoming request for debugging

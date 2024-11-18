@@ -29,7 +29,10 @@ public class JobHistory {
     @Column(name = "updated_status", nullable = false) // This ensures the column is NOT NULL in the DB
     private PrintJobStatus updatedStatus;
 
-
+    
+    @NotNull
+    @Column(name = "action_type", nullable = false)
+    private String actionType;
 
     @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
@@ -48,6 +51,9 @@ public class JobHistory {
     @Column(name = "new_position")
     private Integer newPosition;
 
+
+    @Column(name = "file_size")
+    private Long fileSize;  // This will store the size of the file
 
 
     // Constructors
@@ -152,6 +158,22 @@ public class JobHistory {
 
     public void setNewPosition(Integer newPosition) {
         this.newPosition = newPosition;
+    }
+
+    public String getActionType() {
+        return actionType;
+    }
+
+    public void setActionType(String actionType) {
+        this.actionType = actionType;
+    }
+    
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(Long fileSize) {
+        this.fileSize = fileSize;
     }
 
 }

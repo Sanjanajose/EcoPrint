@@ -64,6 +64,7 @@ public class UserService {
     private final UserDeviceService userDeviceService;
     private final RefreshTokenService refreshTokenService;
     private final ActivityLogService activityLogService; // Added for logging
+    
     private static final Set<String> ALLOWED_FILE_FORMATS = Set.of("jpg", "jpeg", "png");
 
     @Autowired
@@ -410,6 +411,20 @@ public class UserService {
         // Return an empty list if ROLE_ADMIN does not exist
         return Collections.emptyList();
     }
+    // Method to get the current authenticated user's ID
+    public Long getCurrentUserId() {
+        // Logic to get the current user's ID
+        return 1L; // Replace with actual logic (e.g., fetching from the security context)
+    }
 
+    // Method to check if the user has the given role
+    public boolean hasRole(String role) {
+        // Logic to check if the user has the specified role
+        return true; // Replace with actual role-checking logic (e.g., from Spring Security)
+    }
 
+    // Method to check if the user is the owner of the job (this should be handled in PrintJobService)
+    public boolean isOwner(Long jobId) {
+        return false; // You don't need to access jobs directly here. This logic is handled in PrintJobService.
+    }
 }

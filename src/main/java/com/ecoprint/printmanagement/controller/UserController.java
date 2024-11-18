@@ -269,6 +269,7 @@ public class UserController {
     
     @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
     @PostMapping("/{userId}/assignRoles")
+    @Operation(summary = "Admins or super admins can assign roles")
     public ResponseEntity<ApiResponse> assignRolesToUser(
             @PathVariable Long userId,
             @RequestBody RoleAssignmentRequest roleAssignmentRequest,
@@ -288,6 +289,7 @@ public class UserController {
     
     
     @PreAuthorize("hasRole('ROLE_SUPERADMIN')")
+    @Operation(summary = "Admins or super admins can delete roles")
     @DeleteMapping("/{userId}/deleteRole")
     public ResponseEntity<ApiResponse> deleteUserRole(
             @PathVariable Long userId,

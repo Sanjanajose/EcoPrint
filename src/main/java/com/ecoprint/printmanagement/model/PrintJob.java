@@ -20,11 +20,17 @@ public class PrintJob {
     @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
     private User user;  // The user associated with this print job
 
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority")
+    private Priority priority;
 
     // File Details
     @NotNull(message = "File cannot be null.")
+    @NotEmpty(message = "fileName must not be empty")
     @Column(name = "file_name", nullable = false) 
     private String fileName;
+
 
     @Column(name = "file_type", nullable = false)
     private String fileType;
@@ -51,8 +57,6 @@ public class PrintJob {
     @Column
     private int queuePosition;
 
-    @Column
-    private Integer priority;
 
     // Print Details
     @NotNull(message = "Pages printed is mandatory")
@@ -131,8 +135,6 @@ public class PrintJob {
     public int getQueuePosition() { return queuePosition; }
     public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
 
-    public Integer getPriority() { return priority; }
-    public void setPriority(Integer priority) { this.priority = priority; }
 
     public int getPagesPrinted() { return pagesPrinted; }
     public void setPagesPrinted(int pagesPrinted) { this.pagesPrinted = pagesPrinted; }
@@ -181,6 +183,14 @@ public class PrintJob {
             user = new User();
         }
         user.setId(userId);  // Assuming User has a setId method
+    }
+
+    public Priority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Priority priority) {
+        this.priority = priority;
     }
 
 }

@@ -37,8 +37,11 @@ import org.springframework.web.multipart.MultipartFile;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
+import com.ecoprint.printmanagement.model.Priority;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+import java.util.Optional;
+
 
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.JobStatusMessage;
@@ -55,6 +58,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/print-jobs")
@@ -62,7 +66,7 @@ public class PrintJobController {
 
     private static final Logger logger = LoggerFactory.getLogger(PrintJobController.class);
     private static final double COST_PER_PAGE = 0.50;
-
+    
     @Autowired
     private PrintJobService printJobService;
 
@@ -81,13 +85,20 @@ public class PrintJobController {
     @Autowired
     private NotificationService pushNotificationService;
     
-    @Autowired
-    private UserRepository userrepository;
 
-    @GetMapping("/history")
-    public List<JobHistory> getJobHistory(@RequestParam Long jobId) {
-        return jobHistoryRepository.findByPrintJobIdOrderByTimestampAsc(jobId);
+    @Autowired
+    private UserRepository userRepository;
+
+    
+
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Operation(summary = "allows Admin to get the history of a particular print job")
+    @GetMapping("/{jobId}/history")
+    public ResponseEntity<List<JobHistory>> getJobHistory(@PathVariable Long jobId) {
+        List<JobHistory> historyList = jobHistoryRepository.findByPrintJobIdOrderByTimestampAsc(jobId);
+        return ResponseEntity.ok(historyList);
     }
+
 
     @PostMapping("/upload")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
@@ -115,8 +126,13 @@ public class PrintJobController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error during file upload");
         }
     }
+    
+    
+    
+    
 
     @GetMapping("/download/{id}")
+    @Operation(summary = "allows to download the submitted print jobs ")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) {
         try {
             PrintJob printJob = printJobService.findPrintJobById(id);
@@ -149,6 +165,7 @@ public class PrintJobController {
     
     @DeleteMapping("/{jobId}")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    @Operation(summary = "allows Admin and job owners to remove the print jobs from the queue ")
     public ResponseEntity<String> removeJob(@PathVariable Long jobId) {
         printJobService.removeJob(jobId);
         return ResponseEntity.ok("Print job removed from queue");
@@ -177,20 +194,11 @@ public class PrintJobController {
         return updateJobStatus(jobId, PrintJobStatus.FAVORITE);
     }
     
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
-    @PostMapping("/admin/{jobId}/prioritize")
-    public ResponseEntity<String> prioritizeJob(@PathVariable Long jobId) {
-        try {
-            printJobService.prioritizeJob(jobId);
-            return ResponseEntity.ok("Job prioritized successfully");
-        } catch (Exception e) {
-            logger.error("Error prioritizing job", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to prioritize job");
-        }
-    }
+    
 
     
     @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Operation(summary = "allows ADMIN to get the list of all the jobs ")
     @GetMapping("/admin")
     public ResponseEntity<List<PrintJob>> getAllJobs() {
         List<PrintJob> jobs = printJobRepository.findAllByOrderByStatusAscPriorityAsc();
@@ -199,6 +207,7 @@ public class PrintJobController {
     
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/admin/{jobId}")
+    @Operation(summary = "allows Admin to get the history of a job based on job id provided ")
     public ResponseEntity<Map<String, Object>> getJobDetails(@PathVariable Long jobId) {
         PrintJob job = printJobService.findPrintJobById(jobId);
         List<JobHistory> history = jobHistoryRepository.findByPrintJobIdOrderByTimestampAsc(jobId);
@@ -212,12 +221,33 @@ public class PrintJobController {
     
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/queued")
+    @Operation(summary = "allows Admin to get the list of all the queued jobs by priority ")
     public ResponseEntity<List<PrintJob>> getQueuedJobsOrderedByPriority() {
         // Retrieve all jobs with QUEUED status, ordered by priority
         List<PrintJob> queuedJobs = printJobRepository.findByStatusOrderByPriorityAsc(PrintJobStatus.QUEUED);
         return ResponseEntity.ok(queuedJobs);
     }
     
+    @PutMapping("/set-priority/{jobId}")
+    @PreAuthorize("hasRole('ROLE_ADMIN') or @userService.isOwner(#jobId)")
+    @Operation(summary = "allows to set the priority of the print jobs ", description = "allows job owner or admin to set the priority of print job")
+    public ResponseEntity<String> setJobPriority(@PathVariable Long jobId, @RequestBody Priority priority) {
+        if (priority == null) {
+            return ResponseEntity.badRequest().body("Priority cannot be null");
+        }
+
+        // Log the received priority
+        System.out.println("Received priority: " + priority);
+
+        try {
+            printJobService.setJobPriority(jobId, priority);
+            return ResponseEntity.ok("Print job priority updated successfully");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating job priority");
+        }
+    }
+
+
 
     
     
@@ -289,16 +319,42 @@ public class PrintJobController {
             return ResponseEntity.ok(jobs);
         }
 
+        @PostMapping("/addjob")
+        @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+        @Operation(summary = "allows users to send submitted documents to print job lifecycle ")
+        public ResponseEntity<String> addJob(@Valid @RequestBody PrintJobRequest jobRequest) {
+            try {
+                // Log the received job request for debugging
+                logger.debug("Received job request: {}", jobRequest);
 
-    @PostMapping("/addjob")
-    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
-    public ResponseEntity<String> addJob(@RequestBody PrintJobRequest jobRequest) {
-        printJobService.addJob(jobRequest);
-        return ResponseEntity.status(HttpStatus.CREATED).body("Print job added to queue");
-    }
+                // Validate file name or any other important fields
+                if (jobRequest.getFileName() == null || jobRequest.getFileName().isEmpty()) {
+                    logger.error("Invalid request: fileName is required");
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: fileName must not be null or empty");
+                }
+
+                // Delegate the job creation to the service layer
+                printJobService.addJob(jobRequest);
+
+                // Return success response
+                return ResponseEntity.status(HttpStatus.CREATED).body("Print job added to Ready");
+
+            } catch (IllegalArgumentException e) {
+                // Handle invalid input
+                logger.error("Invalid input error during job addition", e);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid input: " + e.getMessage());
+            } catch (Exception e) {
+                // Handle unexpected errors
+                logger.error("Error during job addition", e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error adding the print job");
+            }
+        }
+        
+      
     
-    
+
     @PutMapping("/jobs/{jobId}/resume")
+    @Operation(summary = "allows to resume the paused print jobs ")
     public ResponseEntity<String> resumeJob(@PathVariable Long jobId) {
         printJobService.resumeJob(jobId);
         return ResponseEntity.ok("Job resumed successfully");
@@ -306,10 +362,12 @@ public class PrintJobController {
     
     @PutMapping("/{jobId}/reorder")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    @Operation(summary = "allows to reorder the print jobs ", description = "allows users to reorder the print jobs if the user is an admin or the job owner")
     public ResponseEntity<String> reorderJob(@PathVariable Long jobId, @RequestParam int newPosition) {
         printJobService.reorderJob(jobId, newPosition);
         return ResponseEntity.ok("Print job reordered");
     }
+
   
 
 
