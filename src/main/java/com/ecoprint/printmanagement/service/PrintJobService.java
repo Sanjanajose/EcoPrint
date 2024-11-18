@@ -26,6 +26,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.exception.NetworkException;
@@ -41,11 +42,13 @@ import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.Priority;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
+import com.ecoprint.printmanagement.model.SubmittedJobs;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
+import com.ecoprint.printmanagement.repository.SubmitJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 
 import jakarta.persistence.EntityManager;
@@ -77,6 +80,9 @@ public class PrintJobService {
     
     private final UserRepository userrepository;
     
+    private final SubmitJobRepository submitJobRepository;
+
+    
    
     @Autowired
     private NotificationLogRepository notificationLogRepository;
@@ -101,17 +107,17 @@ public class PrintJobService {
     private NotificationService pushNotificationService;
     private final Tika tika = new Tika();
 
-    public PrintJobService(PrintJobRepository printJobRepository, JobHistoryRepository jobHistoryRepository,UserRepository userrepository, SimpMessagingTemplate messagingTemplate) {
+    public PrintJobService(PrintJobRepository printJobRepository, JobHistoryRepository jobHistoryRepository,UserRepository userrepository, SubmitJobRepository submitJobRepository,SimpMessagingTemplate messagingTemplate) {
         this.printJobRepository = printJobRepository;
         this.jobHistoryRepository = jobHistoryRepository;
         this.userrepository = userrepository;
+        this.submitJobRepository = submitJobRepository;
         this.messagingTemplate = messagingTemplate;
-        
+       
     }
 
 
     // Method to upload file and create a new job
-    @Transactional
  // Method to upload file and create a new job
   /**  public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost) throws IOException {
         if (file == null || file.isEmpty()) {
@@ -156,8 +162,8 @@ public class PrintJobService {
  // Method to upload file and create a new job
 
    
-    
-    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost,String color,Boolean duplex,String paperSize) throws IOException {
+    @Transactional
+    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
         }
@@ -172,36 +178,33 @@ public class PrintJobService {
         User user = userrepository.findByUsername(userName)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", userName));
 
+        if (!userrepository.existsById(user.getId())) {
+            throw new IllegalArgumentException("User does not exist");
+        }
+        
+
+
         byte[] fileData = file.getBytes();
         
-        String fileName = file.getOriginalFilename(); // Extract file name
-        
-        PrintJob printJob = new PrintJob();
-        printJob.setFileName(fileName);  // Set file name
-        printJob.setFileType(fileType);  // Set file type
-        printJob.setFileSize(file.getSize());  // Set file size
-        printJob.setUser(user);  // Set the User entity
-        printJob.setUserName(user.getUsername());  // Populate the userName field
-        printJob.setUploadTimestamp(LocalDateTime.now());  // Timestamp for upload
-        printJob.setFileData(fileData);  // Set the file data
-        printJob.setDescription(description);  // Set description
-        printJob.setPagesPrinted(pagesPrinted);  // Set pages printed
-        printJob.setCost(cost);  // Set cost
-        printJob.setStatus(PrintJobStatus.SUBMITTED);  // Set job status as SUBMITTED
-        printJob.setSubmittedAt(LocalDateTime.now());  // Set submission timestamp
-        printJob.setUserName(user.getUsername()); // Populate the userName field
-        printJob.setUploadTimestamp(LocalDateTime.now());
-        printJob.setFileData(fileData);
-        printJob.setDescription(description);
-        printJob.setPagesPrinted(pagesPrinted);
-        printJob.setCost(cost);
-        printJob.setColor(color);
-        printJob.setDuplex(duplex);
-        printJob.setPaperSize(paperSize);
-        printJob.setStatus(PrintJobStatus.SUBMITTED);
-        printJob.setSubmittedAt(LocalDateTime.now());
+        String fileName = file.getOriginalFilename(); // Extract file name        
+        SubmittedJobs submittedJob  = new SubmittedJobs();
+        submittedJob.setFileName(file.getOriginalFilename());
+        submittedJob.setFileType(fileType);
+        submittedJob.setFileSize(file.getSize());
+        submittedJob.setUser(user); // Set the User entity
+        submittedJob.setUserName(user.getUsername()); // Populate the userName field
+        submittedJob.setUploadTimestamp(LocalDateTime.now());
+        submittedJob.setFileData(fileData);
+        submittedJob.setDescription(description);
+        submittedJob.setStatus(PrintJobStatus.SUBMITTED);
+        System.out.println("Aftter Setting:::::"+submittedJob.getStatus());
+       // submittedJobs.setStatus("PENDING"); // Or any default value
+        submittedJob.setPagesPrinted(pagesPrinted);
+        Assert.notNull(submittedJob.getFileName(), "File name must not be null");
+        Assert.notNull(submittedJob.getStatus(), "Job status must not be null");
 
-        printJobRepository.save(printJob);
+
+        submitJobRepository.save(submittedJob);
 
 
 
@@ -213,18 +216,21 @@ public class PrintJobService {
         
         // Step 8: Log the job submission action
         logJobAction(
-            printJob.getId(),  // Job ID
+        		submittedJob.getId(),  // Job ID
             PrintJobStatus.SUBMITTED,  // Previous status (if any)
             PrintJobStatus.SUBMITTED,  // Updated status (after file upload)
             currentUserId,  // Current user ID (assuming a method to get it)
             "Job submitted with file upload",  // Log message
-            Optional.of(printJob.getUserName()),  // User name (optional)
+            Optional.of(submittedJob.getUserName()),  // User name (optional)
             Optional.empty(),  // No position info (optional)
             Optional.empty(),  // No position info (optional)
             "file_upload",  // Action type (e.g., file upload)
             Optional.of(fileName),  // File name (passed as Optional)
             Optional.of(file.getSize())  // File size (passed as Optional)
         );
+        
+
+
 
     }
     
@@ -582,16 +588,14 @@ public class PrintJobService {
     		history.setTimestamp(LocalDateTime.now());
     		userName.ifPresent(history::setUserName);  // Optional userName
     		history.setComments(comments);
-
+            history.setActionType(actionType);
     		// Set file-related fields if they are present
     		fileName.ifPresent(history::setUserName);  // Set file name if present
     		fileSize.ifPresent(size -> history.setFileSize(size));
     		// Set file size if present
-
     		// Set position changes if available
     		previousPosition.ifPresent(history::setPreviousPosition);
     		newPosition.ifPresent(history::setNewPosition);
-
     		try {
     			jobHistoryRepository.save(history);  // Save the log entry
     		} catch (Exception e) {

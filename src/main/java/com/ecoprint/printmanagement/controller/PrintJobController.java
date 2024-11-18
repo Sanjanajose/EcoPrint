@@ -110,13 +110,15 @@ public class PrintJobController {
             @RequestParam(value = "file", required = true) MultipartFile file,
             @RequestParam(value = "userName", required = true) String userName,
             @RequestParam(value = "description", required = false) String description,
-            @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted,
-            @RequestParam(value ="color") String color,
-            @RequestParam(value ="duplex") Boolean duplex,
-            @RequestParam(value ="paperSize") String paperSize) {
+            @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted
+           //@RequestParam(value ="color") String color,
+            //@RequestParam(value ="duplex") Boolean duplex,
+            //@RequestParam(value ="paperSize") String paperSize
+            ) {
+            
         try {
-            double cost = pagesPrinted * COST_PER_PAGE;
-            printJobService.uploadFile(file, userName, description, pagesPrinted, cost,color,duplex,paperSize);
+           
+            printJobService.uploadFile(file, userName, description, pagesPrinted);
             return ResponseEntity.status(HttpStatus.CREATED).body("File uploaded successfully and job submitted");
         } catch (IOException e) {
             logger.error("IOException during file upload", e);
