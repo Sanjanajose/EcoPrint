@@ -99,10 +99,13 @@ public class PrintJobController {
             @RequestParam(value = "file", required = true) MultipartFile file,
             @RequestParam(value = "userName", required = true) String userName,
             @RequestParam(value = "description", required = false) String description,
-            @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted) {
+            @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted,
+            @RequestParam(value ="color") String color,
+            @RequestParam(value ="duplex") Boolean duplex,
+            @RequestParam(value ="paperSize") String paperSize) {
         try {
             double cost = pagesPrinted * COST_PER_PAGE;
-            printJobService.uploadFile(file, userName, description, pagesPrinted, cost);
+            printJobService.uploadFile(file, userName, description, pagesPrinted, cost,color,duplex,paperSize);
             return ResponseEntity.status(HttpStatus.CREATED).body("File uploaded successfully and job submitted");
         } catch (IOException e) {
             logger.error("IOException during file upload", e);
@@ -298,6 +301,7 @@ public class PrintJobController {
     }
     
     
+    
     @PutMapping("/jobs/{jobId}/resume")
     public ResponseEntity<String> resumeJob(@PathVariable Long jobId) {
         printJobService.resumeJob(jobId);
@@ -311,6 +315,25 @@ public class PrintJobController {
         return ResponseEntity.ok("Print job reordered");
     }
   
+    @GetMapping("/ready-jobs")
+    @Operation(summary = "Get Ready Jobs",
+               description = "Retrieve a list of jobs that are ready to print with estimated wait times.")
+    public ResponseEntity<List<PrintJob>> getReadyJobs() {
+        List<PrintJob> readyJobs = printJobService.getReadyJobs();
+        return ResponseEntity.ok(readyJobs);
+    }
+ 
+    @PostMapping("/retry-failed-jobs/{jobId}")
+    public ResponseEntity<String> retryFailedJobById(@PathVariable Long jobId) {
+    	boolean retrySuccess = printJobService.retryFailedJobById(jobId);
+    
+    if (retrySuccess) {
+        return ResponseEntity.ok("Retry process triggered for job ID: " + jobId);
+    } else {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job ID " + jobId + " not found or not eligible for retry.");
+    }
+    }
+
 
 
 }
