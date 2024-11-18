@@ -55,7 +55,7 @@ public class PrintJob {
 
     // Queue Management
     @Column
-    private int queuePosition;
+    private Integer queuePosition; 
 
 
     // Print Details
@@ -99,6 +99,32 @@ public class PrintJob {
 
     @Column(name = "favorite_at")
     private LocalDateTime favoriteAt;
+    
+    @Column(name = "color")
+    private String color;
+
+    @Column(name = "duplex")
+    private Boolean duplex;
+
+    @Column(name = "paper_size")
+    private String paperSize;
+    
+    private int retryCount;
+
+    @Enumerated(EnumType.STRING)
+    private FailureReason failureReason;
+
+    private LocalDateTime nextRetryTime;
+    
+    private boolean networkIssue;
+    
+    private boolean printerError;
+    
+    public void incrementRetryCount() {
+        this.retryCount++;
+    }
+        
+
 
     // Constructors
     public PrintJob() {}
@@ -132,8 +158,6 @@ public class PrintJob {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
-    public int getQueuePosition() { return queuePosition; }
-    public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
 
 
     public int getPagesPrinted() { return pagesPrinted; }
@@ -185,12 +209,96 @@ public class PrintJob {
         user.setId(userId);  // Assuming User has a setId method
     }
 
+
     public Priority getPriority() {
         return priority;
     }
 
     public void setPriority(Priority priority) {
         this.priority = priority;
+    }
+
+	public String getColor() {
+		return color;
+	}
+
+	public void setColor(String color) {
+		this.color = color;
+	}
+
+	public Boolean getDuplex() {
+		return duplex;
+	}
+
+	public void setDuplex(Boolean duplex) {
+		this.duplex = duplex;
+	}
+
+	public String getPaperSize() {
+		return paperSize;
+	}
+
+	public void setPaperSize(String paperSize) {
+		this.paperSize = paperSize;
+	}
+
+	public Integer getQueuePosition() {
+		return queuePosition;
+	}
+
+	public void setQueuePosition(Integer queuePosition) {
+		this.queuePosition = queuePosition;
+	}
+
+	public int getRetryCount() {
+		return retryCount;
+	}
+
+	public void setRetryCount(int retryCount) {
+		this.retryCount = retryCount;
+	}
+
+	public FailureReason getFailureReason() {
+		return failureReason;
+	}
+
+	public void setFailureReason(FailureReason failureReason) {
+		this.failureReason = failureReason;
+	}
+
+	public LocalDateTime getNextRetryTime() {
+		return nextRetryTime;
+	}
+
+	public void setNextRetryTime(LocalDateTime nextRetryTime) {
+		this.nextRetryTime = nextRetryTime;
+	}
+
+	public boolean isNetworkIssue() {
+		return networkIssue;
+	}
+
+	public void setNetworkIssue(boolean networkIssue) {
+		this.networkIssue = networkIssue;
+	}
+
+	public boolean isPrinterError() {
+		return printerError;
+	}
+
+	public void setPrinterError(boolean printerError) {
+		this.printerError = printerError;
+	}
+    
+	public boolean hasNetworkConnectivityIssues() {
+        // Will be Implementing  logic to detect network issues once connected with printer, for now using a flag for simulating the logic
+        return false; // will be changing this flags for testing purpose
+    }
+
+    public boolean hasPrinterHardwareIssues() {
+        // Will be Implementing  logic to detect network issues once connected with printer, for now using a flag for simulating the logic
+        return false; // will be changing this flags for testing purpose
+
     }
 
 }
