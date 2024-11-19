@@ -1,7 +1,10 @@
 package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
@@ -33,6 +37,11 @@ public class SubmittedJobs {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    
+    @OneToMany(mappedBy = "submittedJob", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PrintJob> printJobs = new ArrayList<>();
+
+    
     // File Details
     @NotNull(message = "File cannot be null.")
     @Column(name = "file_name", nullable = false) 

@@ -21,6 +21,11 @@ public class PrintJob {
     private User user;  // The user associated with this print job
 
     
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "submitted_job_id", nullable = false)
+    private SubmittedJobs submittedJob;
+
+    
     @Enumerated(EnumType.STRING)
     @Column(name = "priority")
     private Priority priority;
@@ -301,4 +306,18 @@ public class PrintJob {
 
     }
 
+
+
+	public SubmittedJobs getSubmittedJob() {
+		return submittedJob;
+	}
+
+
+
+	public void setSubmittedJob(SubmittedJobs submittedJob) {
+		this.submittedJob = submittedJob;
+	}
+
+    
+    
 }
