@@ -8,9 +8,13 @@ import org.springframework.stereotype.Service;
 
 import com.ecoprint.printmanagement.model.NotificationLog;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.Message;
+
 
 @Service
-public class PushNotificationService implements NotificationService {
+public abstract class PushNotificationService implements NotificationService {
 
     @Autowired
     private UserService userService; // To get device tokens
@@ -18,30 +22,36 @@ public class PushNotificationService implements NotificationService {
     
     @Autowired
     private NotificationLogRepository notificationLogRepository;
+   
     @Override
     public void sendEmailNotification(String subject, String message) {
-        // Not implemented for push notifications
+        // This method intentionally left blank for now as it's for push notifications
     }
 
-    @Override
-    public void sendPushNotification(String title, String message) {
-        // Retrieve notification tokens for admins
-        List<String> adminNotificationTokens = userService.getAdminNotificationTokens();
+    @Autowired
+    private FirebaseMessaging firebaseMessaging;
 
-        for (String token : adminNotificationTokens) {
-            // Build and send push notification using Firebase or another service
-            // Example of sending a push notification using Firebase Cloud Messaging (placeholder code):
-            // FirebaseMessaging.getInstance().sendAsync(
-            //     Message.builder()
-            //            .setToken(token)
-            //            .putData("title", title)
-            //            .putData("message", message)
-            //            .build()
-            // );
+    public void sendPushNotification(Long userId, String title, String message) {
+        String token = getUserDeviceToken(userId); // Fetch user's device token
 
-            // Log the push notification
-            logNotification(token, message, "PUSH");
+        if (token != null) {
+            Message pushMessage = Message.builder()
+                    .putData("title", title)
+                    .putData("message", message)
+                    .setToken(token)
+                    .build();
+
+            try {
+                firebaseMessaging.send(pushMessage);
+            } catch (FirebaseMessagingException e) {
+                e.printStackTrace();
+            }
         }
+    }
+
+    private String getUserDeviceToken(Long userId) {
+        // Implement this logic to fetch the user's device token from your database
+        return "userDeviceToken";
     }
 
 
@@ -52,3 +62,4 @@ public class PushNotificationService implements NotificationService {
         notificationLogRepository.save(log);
     }
 }
+

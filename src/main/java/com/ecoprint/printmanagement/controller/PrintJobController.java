@@ -1,13 +1,9 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
-import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -23,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,30 +30,22 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-
+import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+import com.ecoprint.printmanagement.model.JobHistory;
+import com.ecoprint.printmanagement.model.PrintHistoryMap;
 import com.ecoprint.printmanagement.model.PrintJob;
+import com.ecoprint.printmanagement.model.PrintJobDTO;
 import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.Priority;
-import com.ecoprint.printmanagement.model.User;
-import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
-import java.util.Optional;
-
-
-import com.ecoprint.printmanagement.model.JobHistory;
-import com.ecoprint.printmanagement.model.JobStatusMessage;
-import com.ecoprint.printmanagement.model.PrintJob;
-import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.service.NotificationService;
 import com.ecoprint.printmanagement.service.PrintJobService;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import org.springframework.web.bind.annotation.RequestBody;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 
@@ -107,16 +96,13 @@ public class PrintJobController {
         description = "Allows a user to upload a file for a print job, calculates the cost based on pages printed, and sets the initial status to SUBMITTED."
     )
     public ResponseEntity<String> uploadPrintJob(
-            @RequestParam(value = "file", required = true) MultipartFile file,
+			@RequestParam(value = "file", required = true) MultipartFile file,
             @RequestParam(value = "userName", required = true) String userName,
             @RequestParam(value = "description", required = false) String description,
-            @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted,
-            @RequestParam(value ="color") String color,
-            @RequestParam(value ="duplex") Boolean duplex,
-            @RequestParam(value ="paperSize") String paperSize) {
+            @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted) {
         try {
             double cost = pagesPrinted * COST_PER_PAGE;
-            printJobService.uploadFile(file, userName, description, pagesPrinted, cost,color,duplex,paperSize);
+            printJobService.uploadFile(file, userName, description, pagesPrinted, cost);
             return ResponseEntity.status(HttpStatus.CREATED).body("File uploaded successfully and job submitted");
         } catch (IOException e) {
             logger.error("IOException during file upload", e);
@@ -203,31 +189,26 @@ public class PrintJobController {
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @Operation(summary = "allows ADMIN to get the list of all the jobs ")
     @GetMapping("/admin")
-    public ResponseEntity<List<PrintJob>> getAllJobs() {
-        List<PrintJob> jobs = printJobRepository.findAllByOrderByStatusAscPriorityAsc();
+    public ResponseEntity<List<PrintJobDTO>> getAllJobs() {
+    	List<PrintJobDTO> jobs = printJobService.getAllJobs();
         return ResponseEntity.ok(jobs);
     }
     
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/admin/{jobId}")
     @Operation(summary = "allows Admin to get the history of a job based on job id provided ")
-    public ResponseEntity<Map<String, Object>> getJobDetails(@PathVariable Long jobId) {
-        PrintJob job = printJobService.findPrintJobById(jobId);
-        List<JobHistory> history = jobHistoryRepository.findByPrintJobIdOrderByTimestampAsc(jobId);
+    public ResponseEntity<PrintHistoryMap> getJobDetails(@PathVariable Long jobId) {
+        PrintHistoryMap printHistory = printJobService.getPrintHistoryById(jobId);
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("job", job);
-        response.put("history", history);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(printHistory);
     }
     
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/queued")
     @Operation(summary = "allows Admin to get the list of all the queued jobs by priority ")
-    public ResponseEntity<List<PrintJob>> getQueuedJobsOrderedByPriority() {
+    public ResponseEntity<List<PrintJobDTO>> getQueuedJobsOrderedByPriority() {
         // Retrieve all jobs with QUEUED status, ordered by priority
-        List<PrintJob> queuedJobs = printJobRepository.findByStatusOrderByPriorityAsc(PrintJobStatus.QUEUED);
+        List<PrintJobDTO> queuedJobs = printJobService.getPrintJobsByStatus(PrintJobStatus.QUEUED);
         return ResponseEntity.ok(queuedJobs);
     }
     
@@ -372,25 +353,6 @@ public class PrintJobController {
     }
 
   
-    @GetMapping("/ready-jobs")
-    @Operation(summary = "Get Ready Jobs",
-               description = "Retrieve a list of jobs that are ready to print with estimated wait times.")
-    public ResponseEntity<List<PrintJob>> getReadyJobs() {
-        List<PrintJob> readyJobs = printJobService.getReadyJobs();
-        return ResponseEntity.ok(readyJobs);
-    }
- 
-    @PostMapping("/retry-failed-jobs/{jobId}")
-    public ResponseEntity<String> retryFailedJobById(@PathVariable Long jobId) {
-    	boolean retrySuccess = printJobService.retryFailedJobById(jobId);
-    
-    if (retrySuccess) {
-        return ResponseEntity.ok("Retry process triggered for job ID: " + jobId);
-    } else {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job ID " + jobId + " not found or not eligible for retry.");
-    }
-    }
-
 
 
 }

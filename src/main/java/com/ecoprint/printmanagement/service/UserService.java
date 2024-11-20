@@ -427,4 +427,36 @@ public class UserService {
     public boolean isOwner(Long jobId) {
         return false; // You don't need to access jobs directly here. This logic is handled in PrintJobService.
     }
+    
+    public Role getRoleByName(String roleName) {
+        // Convert String to RoleName enum
+        RoleName roleNameEnum;
+        try {
+            roleNameEnum = RoleName.valueOf(roleName.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid role name: " + roleName, ex);
+        }
+
+        // Fetch role from the repository
+        return roleRepository.findByRole(roleNameEnum)
+                .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleNameEnum));
+    }
+    
+    public List<User> getUsersByRole(String roleName) {
+        // Convert role name to RoleName enum
+        RoleName roleNameEnum;
+        try {
+            roleNameEnum = RoleName.valueOf(roleName.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid role name: " + roleName, ex);
+        }
+
+        // Fetch the Role entity
+        Role role = roleRepository.findByRole(roleNameEnum)
+                .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleNameEnum));
+
+        // Fetch users associated with the role
+        return userRepository.findByRolesContaining(role);
+    }
+
 }
