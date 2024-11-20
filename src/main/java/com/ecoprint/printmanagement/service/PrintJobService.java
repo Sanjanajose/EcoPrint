@@ -197,40 +197,11 @@ public class PrintJobService {
         submittedJob.setFileData(fileData);
         submittedJob.setDescription(description);
         submittedJob.setStatus(PrintJobStatus.SUBMITTED);
-        System.out.println("Aftter Setting:::::"+submittedJob.getStatus());
-       // submittedJobs.setStatus("PENDING"); // Or any default value
         submittedJob.setPagesPrinted(pagesPrinted);
         Assert.notNull(submittedJob.getFileName(), "File name must not be null");
         Assert.notNull(submittedJob.getStatus(), "Job status must not be null");
-
-
         submitJobRepository.save(submittedJob);
-
-
-
-        // Retrieve current user ID for logging
-
         Long currentUserId = getCurrentUserId();
-
-        // Log job submission
-        
-        // Step 8: Log the job submission action
-        logJobAction(
-        		submittedJob.getId(),  // Job ID
-            PrintJobStatus.SUBMITTED,  // Previous status (if any)
-            PrintJobStatus.SUBMITTED,  // Updated status (after file upload)
-            currentUserId,  // Current user ID (assuming a method to get it)
-            "Job submitted with file upload",  // Log message
-            Optional.of(submittedJob.getUserName()),  // User name (optional)
-            Optional.empty(),  // No position info (optional)
-            Optional.empty(),  // No position info (optional)
-            "file_upload",  // Action type (e.g., file upload)
-            Optional.of(fileName),  // File name (passed as Optional)
-            Optional.of(file.getSize())  // File size (passed as Optional)
-        );
-        
-
-
 
     }
     
