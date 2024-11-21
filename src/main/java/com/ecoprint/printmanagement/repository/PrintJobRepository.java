@@ -33,6 +33,9 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
     Optional<PrintJob> findByFileName(String fileName);
     
     List<PrintJob> findByStatus(PrintJobStatus status);
+    
+    int countByStatusAndIdLessThan(PrintJobStatus status, Long id);
+
 
 
 

@@ -50,6 +50,7 @@ import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.SubmitJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+import com.ecoprint.printmanagement.response.ReadyJobResponse;
 import com.google.api.client.util.Objects;
 
 @Service
@@ -1035,20 +1036,33 @@ public class PrintJobService {
 		return printHistoryMap;
 	}
 	
-	   public List<PrintJob> getReadyJobs() {
-		    List<PrintJob> readyJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
-		    List<PrintJob> responseList = new ArrayList<>();
-		    for (PrintJob job : readyJobs) {
-		        if (job.getId() == null || job.getId() == 0) {
-		            throw new IllegalArgumentException("Invalid job ID: " + job.getId());
-		        }	        
-		        PrintJob printJob = new PrintJob();
-		        printJob.setId(job.getId());
-		        printJob.setFileName(job.getFileName());	        
-		        responseList.add(printJob);
-		    }
-		    return responseList;
-		}
+	public List<ReadyJobResponse> getReadyJobs() {
+	    // Fetch the list of print jobs with status READY
+	    List<PrintJob> printJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
+
+	    // Map each PrintJob entity to a PrintJobResponse DTO
+	    return printJobs.stream().map(job -> {
+	    	ReadyJobResponse response = new ReadyJobResponse();
+	        response.setId(job.getId());
+	        response.setFileName(job.getFileName());
+	        response.setEstimatedWaitTime(calculateEstimatedWaitTime(job)); // Optional: Add logic for wait time
+
+	        // Add logic to handle User entity gracefully
+	        if (job.getUser() != null && job.getUser().getId() != null && job.getUser().getId() > 0) {
+	            response.setUserName(job.getUser().getUsername());
+	        } else {
+	            response.setUserName(null); // Handle missing or invalid User
+	        }
+
+	        return response; // Return the transformed DTO
+	    }).collect(Collectors.toList()); // Collect into a list
+	}
+
+	
+	private int calculateEstimatedWaitTime(PrintJob job) {
+	    int jobsAhead = printJobRepository.countByStatusAndIdLessThan(PrintJobStatus.READY, job.getId());
+	    return jobsAhead * 5; // Each job takes 5 minutes
+	}
 
 	   public void handleJobFailure(PrintJob job, FailureReason failureReason) {
 		    // Increment retry count

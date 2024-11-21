@@ -41,6 +41,7 @@ import com.ecoprint.printmanagement.model.Priority;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+import com.ecoprint.printmanagement.response.ReadyJobResponse;
 import com.ecoprint.printmanagement.service.NotificationService;
 import com.ecoprint.printmanagement.service.PrintJobService;
 
@@ -354,17 +355,11 @@ public class PrintJobController {
 
     
     @GetMapping("/ready-jobs")
-
     @Operation(summary = "Get Ready Jobs",
-
                description = "Retrieve a list of jobs that are ready to print with estimated wait times.")
-
-    public ResponseEntity<List<PrintJob>> getReadyJobs() {
-
-        List<PrintJob> readyJobs = printJobService.getReadyJobs();
-
+    public ResponseEntity<List<ReadyJobResponse>> getReadyJobs() {
+        List<ReadyJobResponse> readyJobs = printJobService.getReadyJobs();
         return ResponseEntity.ok(readyJobs);
-
     }
 
  
