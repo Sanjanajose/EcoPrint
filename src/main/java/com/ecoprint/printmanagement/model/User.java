@@ -37,6 +37,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
@@ -56,7 +57,8 @@ public class User extends DateAudit {
     private Long id;
     
     
-    
+    @OneToOne(mappedBy = "user")
+    private UserNotificationPreferences notificationPreferences;
 
     @NaturalId
     @Column(name = "EMAIL", unique = true)
