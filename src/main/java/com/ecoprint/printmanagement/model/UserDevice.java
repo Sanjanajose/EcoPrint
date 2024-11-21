@@ -27,7 +27,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 
+@Table(name = "user_device")
 @Entity(name = "USER_DEVICE")
 public class UserDevice extends DateAudit {
 

@@ -9,6 +9,7 @@ public enum Priority {
 
     @JsonCreator
     public static Priority fromString(String value) {
+    	 System.out.println("Deserializing value: " + value);
         if (value != null) {
             try {
                 return Priority.valueOf(value.toUpperCase());

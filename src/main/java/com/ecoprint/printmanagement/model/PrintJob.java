@@ -50,11 +50,11 @@ public class PrintJob {
     @Column(name = "file_type", nullable = true)
     private String fileType;
 
-    @Column(name = "file_size", nullable = false)
+    @Column(name = "file_size", nullable = true)
     private long fileSize;
 
     @Lob
-    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = false)
+    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = true)
     @JsonSerialize(using = Base64Serializer.class) 
     private byte[] fileData;
 
@@ -85,7 +85,7 @@ public class PrintJob {
 
     // Job Status
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = true)
+    @Column(name = "status", nullable = false)
     private PrintJobStatus status;
 
     // Timestamps for Job Statuses

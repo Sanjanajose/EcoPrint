@@ -12,16 +12,15 @@
  * limitations under the License.
  */
 package com.ecoprint.printmanagement.controller;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.repository.query.Param;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,20 +38,26 @@ import com.ecoprint.printmanagement.annotation.CurrentUser;
 import com.ecoprint.printmanagement.event.OnUserAccountChangeEvent;
 import com.ecoprint.printmanagement.event.OnUserLogoutSuccessEvent;
 import com.ecoprint.printmanagement.exception.FileUploadException;
-import com.ecoprint.printmanagement.exception.InvalidTokenRequestException;
 import com.ecoprint.printmanagement.exception.UpdatePasswordException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
 import com.ecoprint.printmanagement.model.payload.LogOutRequest;
+import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.model.payload.RoleAssignmentRequest;
 import com.ecoprint.printmanagement.model.payload.UpdatePasswordRequest;
 import com.ecoprint.printmanagement.model.payload.UserUpdateRequest;
 import com.ecoprint.printmanagement.service.AuthService;
 import com.ecoprint.printmanagement.service.UserActivityService;
 import com.ecoprint.printmanagement.service.UserService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -200,62 +205,66 @@ public class UserController {
     @PreAuthorize("hasRole('USER')")
     @Operation(summary = "Allows the logged-in user to update their own profile")
     public ResponseEntity<?> updateOwnProfile(
-            @CurrentUser CustomUserDetails currentUser,
-            @Valid @RequestPart("user") UserUpdateRequest updateRequest,
-            @RequestPart(value = "profilePicture", required = false) MultipartFile profilePicture) {
+    		@CurrentUser CustomUserDetails currentUser, // CustomUserDetails to get the current logged-in user
+    	    		@Valid @RequestParam("user") String updateRequest,
+    	    		@RequestParam("profilePic") @io.swagger.v3.oas.annotations.media.Schema(description = "Profile picture to upload", type = "string", format = "binary") MultipartFile profilePic
+    	    		) throws JsonMappingException, JsonProcessingException {
+    	    	ObjectMapper objectMapper = new ObjectMapper();
+    	    	objectMapper.registerModule(new JavaTimeModule());
+    	    	UserUpdateRequest request = objectMapper.readValue(updateRequest, UserUpdateRequest.class);
 
         Long userId = currentUser.getId();
 
         // Validate that the email isn't already in use by another user
-        if (userService.existsByEmail(updateRequest.getEmail()) && !currentUser.getEmail().equals(updateRequest.getEmail())) {
+        if (userService.existsByEmail(request.getEmail()) && !currentUser.getEmail().equals(request.getEmail())) {
             return ResponseEntity.badRequest().body(new ApiResponse(false, "Email is already in use."));
         }
 
         // Validate and upload profile picture if provided
-        if (profilePicture != null && !profilePicture.isEmpty()) {
+        if (profilePic != null && !profilePic.isEmpty()) {
             // Validate file size (5MB limit)
             long maxFileSize = 5 * 1024 * 1024;
-            if (profilePicture.getSize() > maxFileSize) {
+            if (profilePic.getSize() > maxFileSize) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, "File size exceeds the maximum limit of 5MB."));
             }
 
             // Validate file type (JPEG, PNG)
             Set<String> allowedContentTypes = Set.of("image/jpeg", "image/png");
-            if (!allowedContentTypes.contains(profilePicture.getContentType())) {
+            if (!allowedContentTypes.contains(profilePic.getContentType())) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid file type. Only JPEG and PNG are allowed."));
             }
 
             // Handle the upload logic
             try {
-                String profilePictureUrl = userService.uploadProfilePicture(profilePicture, 300, 300);
-                updateRequest.setProfilePicture(profilePictureUrl);  // Set the profile picture URL
+                String profilePictureUrl = userService.uploadProfilePicture(profilePic, 300, 300);
+                request.setProfilePicture(profilePictureUrl);  // Set the profile picture URL
             } catch (FileUploadException e) {
                 return ResponseEntity.badRequest().body(new ApiResponse(false, e.getMessage()));
             }
         }
 
         // Prevent the user from updating their own roles
-        Set<String> currentRoles = currentUser.getAuthorities().stream()
-                .map(role -> role.getAuthority())
-                .collect(Collectors.toSet());
+//        Set<String> currentRoles = currentUser.getAuthorities().stream()
+//                .map(role -> role.getAuthority())
+//                .collect(Collectors.toSet());
 
         // Update user details
         User updatedUserData = new User();
-        updatedUserData.setUsername(updateRequest.getUsername());
-        updatedUserData.setEmail(updateRequest.getEmail());
-        updatedUserData.setPhone(updateRequest.getPhone());
-        updatedUserData.setAddress(updateRequest.getAddress());
-        updatedUserData.setGender(updateRequest.getGender());
-        updatedUserData.setCountry(updateRequest.getCountry());
-        updatedUserData.setDob(updateRequest.getDob());
+        updatedUserData.setUsername(request.getUsername());
+        updatedUserData.setEmail(request.getEmail());
+        updatedUserData.setPhone(request.getPhone());
+        updatedUserData.setAddress(request.getAddress());
+        updatedUserData.setGender(request.getGender());
+        updatedUserData.setCountry(request.getCountry());
+        updatedUserData.setDob(request.getDob());
 
         // Set updated profile picture if available
-        if (updateRequest.getProfilePicture() != null) {
-            updatedUserData.setProfilePicture(updateRequest.getProfilePicture());
+        if (request.getProfilePicture() != null) {
+            updatedUserData.setProfilePicture(request.getProfilePicture());
         }
 
         // Update user in the service layer
-        User updatedUser = userService.updateUser(userId, updatedUserData, currentRoles);
+        User updatedUser = userService.updateUser(userId, updatedUserData);
 
         // Trigger user account change event
         OnUserAccountChangeEvent userUpdateEvent = new OnUserAccountChangeEvent(updatedUser, 

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -13,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -37,12 +39,12 @@ import com.ecoprint.printmanagement.model.Priority;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
+import com.ecoprint.printmanagement.model.UserNotificationPreferences;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
-import com.google.api.client.util.Objects;
 
 @Service
 public class PrintJobService {
@@ -58,8 +60,6 @@ public class PrintJobService {
 	@Autowired
 	private NotificationLogRepository notificationLogRepository;
 
-	@Autowired
-	private NotificationService emailNotificationService;
 
 	@Autowired
 	private RoleRepository roleRepository;
@@ -67,26 +67,37 @@ public class PrintJobService {
 	@Autowired
 	private PrintJobRepository printJobRepository;
 	
-	@Autowired
-    private NotificationService notificationService;
-    
+	
     @Autowired
     private UserNotificationPreferencesService userNotificationPreferencesService;
+
+    
+    
+    @Qualifier("emailNotificationService") // Specify the bean you want to inject
+    private NotificationService emailNotificationService;
+
+    
+    @Qualifier("pushNotificationService") // Specify the bean you want to inject
+    private NotificationService pushNotificationService;
+
+
+    // Use notificationServices.get("emailNotificationService") or notificationServices.get("pushNotificationService")
 
 
 	@Autowired
 	private UserService userService; // To get current user info
+	
 
-	@Autowired
-	private NotificationService pushNotificationService;
 	private final Tika tika = new Tika();
 
 	public PrintJobService(PrintJobRepository printJobRepository, JobHistoryRepository jobHistoryRepository,
-			UserRepository userrepository, SimpMessagingTemplate messagingTemplate) {
+			UserRepository userrepository, SimpMessagingTemplate messagingTemplate, @Qualifier("emailNotificationService") NotificationService emailNotificationService,  @Qualifier("pushNotificationService") NotificationService pushNotificationService) {
 		this.printJobRepository = printJobRepository;
 		this.jobHistoryRepository = jobHistoryRepository;
 		this.userrepository = userrepository;
 		this.messagingTemplate = messagingTemplate;
+		this.emailNotificationService = emailNotificationService;
+		this.pushNotificationService = pushNotificationService;
 
 	}
 
@@ -422,7 +433,7 @@ public class PrintJobService {
 	    sendNotification("Job Status Updated", message, userEmail);
 
 	    // Notify admins
-	    List<String> adminEmails = getAdminEmails(); // Fetch admin emails
+	    List<String> adminEmails = getAdminEmails();
 	    adminEmails.forEach(adminEmail -> sendNotification("Job Status Updated", message, adminEmail));
 
 	    // Log notifications
@@ -430,12 +441,26 @@ public class PrintJobService {
 	    adminEmails.forEach(adminEmail -> logNotification(adminEmail, message));
 	}
 
-	private void sendNotification(String subject, String message, String recipient) {
-	    // Send both email and push notifications
-	    emailNotificationService.sendEmailNotification(subject, message);
-	    pushNotificationService.sendPushNotification(subject, message);
-	}
 
+
+
+	private void sendNotification(String subject, String message, String recipient) {
+	    // Check recipient type and preferences before sending notifications
+	    UserNotificationPreferences preferences = userNotificationPreferencesService
+	            .findByUserEmail(recipient)
+	            .orElseThrow(() -> new ResourceNotFoundException("User notification preferences not found for: " + recipient));
+
+	    // Send email notification if the user prefers email
+	    if (preferences.isPreferEmail()) {
+	    	emailNotificationService.sendEmailNotification(recipient, subject, message);
+	    }
+
+	    // Send push notification if the user prefers in-app notifications
+	    if (preferences.isPreferInApp()) {
+	        String userId = preferences.getUser().getId().toString(); // Fetch the user's ID
+	        pushNotificationService.sendPushNotification(userId, subject, message);
+	    }
+	}
 
 
 	private boolean isStatusAllowedForUser(PrintJobStatus status) {
@@ -444,11 +469,10 @@ public class PrintJobService {
 
 	
 	private List<String> getAdminEmails() {
-	    return userService.getUsersByRole("ROLE_ADMIN")
-	            .stream()
-	            .map(User::getEmail) // Extract email addresses from User objects
-	            .filter(email -> email != null && !email.isEmpty()) // Ensure email is not null or empty
-	            .collect(Collectors.toList());
+	    return userService.getUsersByRole("ROLE_ADMIN") // Replace with your method to fetch admin users
+	        .stream()
+	        .map(User::getEmail) // Replace `User` with your actual user entity class
+	        .collect(Collectors.toList());
 	}
 
 
@@ -791,12 +815,13 @@ public class PrintJobService {
 		PrintJob job = new PrintJob();
 		job.setStatus(PrintJobStatus.READY); // Set the status to 'READY'
 		job.setUser(user); // Associate the job with the authenticated user
+		job.setUserName(user.getUsername()); // Explicitly setting the username
 		job.setDescription(jobRequest.getDescription()); // Set the description from jobRequest
 		job.setQueuePosition(assignNextQueuePosition()); // Get the next queue position from the service
 		job.setFileName(jobRequest.getFileName()); // Reusing the uploaded file name
 		job.setPagesPrinted(jobRequest.getPages()); // Set pages from jobRequest
 		job.setFileData(existingJob.getFileData()); // Re-use the existing file data from previously uploaded job
-		job.setUserName(user.getUsername());
+
 		// Save the new job to the database
 		printJobRepository.save(job);
 
@@ -1026,5 +1051,7 @@ public class PrintJobService {
 
 		return printHistoryMap;
 	}
+	
+	
 
 }
