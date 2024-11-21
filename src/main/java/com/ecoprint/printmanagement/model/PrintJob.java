@@ -35,13 +35,13 @@ public class PrintJob {
     @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
     private User user;  // The user associated with this print job
     
-    
+   /* 
     @ManyToOne(fetch = FetchType.LAZY)
 
     @JoinColumn(name = "submitted_job_id", nullable = false)
 
     private SubmittedJobs submittedJob;
-
+*/
 
 
     
@@ -55,15 +55,15 @@ public class PrintJob {
     @Column(name = "file_name", nullable = false) 
     private String fileName;
 
-
-    @Column(name = "file_type", nullable = true)
+    //@NotNull
+    @Column(name = "file_type")
     private String fileType;
 
-    @Column(name = "file_size", nullable = false)
+    @Column(name = "file_size", nullable = true)
     private long fileSize;
 
     @Lob
-    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = false)
+    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = true)
     @JsonSerialize(using = Base64Serializer.class) 
     private byte[] fileData;
 
@@ -94,7 +94,7 @@ public class PrintJob {
 
     // Job Status
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = true)
+    @Column(name = "status", nullable = false)
     private PrintJobStatus status;
 
     // Timestamps for Job Statuses
@@ -361,7 +361,7 @@ public class PrintJob {
         // Will be Implementing  logic to detect network issues once connected with printer, for now using a flag for simulating the logic
         return false; // will be changing this flags for testing purpose
         }
-
+/*
 	public SubmittedJobs getSubmittedJob() {
 		return submittedJob;
 	}
@@ -369,7 +369,7 @@ public class PrintJob {
 	public void setSubmittedJob(SubmittedJobs submittedJob) {
 		this.submittedJob = submittedJob;
 	}
-
+*/
 
     
 

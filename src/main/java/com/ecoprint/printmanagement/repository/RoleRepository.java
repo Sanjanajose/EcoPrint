@@ -6,10 +6,12 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 
+@Repository
 public interface RoleRepository extends JpaRepository<Role, Long> {
 
     // Query that selects all roles except 'ROLE_SUPERADMIN'
@@ -26,6 +28,8 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
     @Query("SELECT r FROM Role r JOIN r.userList u WHERE u.id = :userId")
     List<Role> findRolesByUserId(@Param("userId") Long userId);
     
+    @Query(value = "SELECT r FROM roles r WHERE r.ROLE_NAME = :roleName", nativeQuery = true)
+    Optional<Role> findByName(@Param("roleName") String roleName);
     
 
 }

@@ -24,6 +24,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.exception.MailSendException;
 import com.ecoprint.printmanagement.exception.PasswordResetLinkException;
@@ -88,12 +89,12 @@ public class AuthService {
     }
 
     @Transactional
-    public Optional<User> registerUser(RegistrationRequest newRegistrationRequest) {
+    public Optional<User> registerUser(RegistrationRequest newRegistrationRequest, MultipartFile profilePicture) {
         String newRegistrationRequestEmail = newRegistrationRequest.getEmail();
         if (emailAlreadyExists(newRegistrationRequestEmail)) {
             throw new ResourceAlreadyInUseException("Email", "Address", newRegistrationRequestEmail);
         }
-        User newUser = userService.createUser(newRegistrationRequest);
+        User newUser = userService.createUser(newRegistrationRequest, profilePicture);
         User registeredNewUser = userService.save(newUser);
 
         // Log the registration action
@@ -323,9 +324,16 @@ public class AuthService {
                     activityLogService.logActivity("Password reset", user.getUsername(), user.getId(),
                         "User reset their password using a reset token.");
 
+                    // Delete the reset token after use
+                    passwordResetService.deleteToken(token);
+
                     return user;
                 });
-    }
+    } 
+    
+    
+    
+    
 
     public User resetWithTempPassword(String email) {
         String tempPassword = UUID.randomUUID().toString().substring(0, 8);

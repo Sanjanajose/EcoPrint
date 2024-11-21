@@ -116,4 +116,10 @@ public class PasswordResetTokenService {
         token.setUser(user);
         return token;
     }
+    
+    
+    public void deleteToken(PasswordResetToken token) {
+        repository.delete(token);
+    }
+
 }

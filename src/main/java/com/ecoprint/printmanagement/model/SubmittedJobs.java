@@ -37,10 +37,10 @@ public class SubmittedJobs {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    
+  /*  
     @OneToMany(mappedBy = "submittedJob", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PrintJob> printJobs = new ArrayList<>();
-
+*/
     
     // File Details
     @NotNull(message = "File cannot be null.")

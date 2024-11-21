@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -42,8 +43,6 @@ import com.ecoprint.printmanagement.exception.TokenRefreshException;
 import com.ecoprint.printmanagement.exception.UserLoginException;
 import com.ecoprint.printmanagement.exception.UserRegistrationException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
-import com.ecoprint.printmanagement.model.LoginRequest2FA;
-import com.ecoprint.printmanagement.model.Permission;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
 import com.ecoprint.printmanagement.model.payload.JwtAuthenticationResponse;
@@ -60,8 +59,13 @@ import com.ecoprint.printmanagement.service.MailService;
 import com.ecoprint.printmanagement.service.OTPService;
 import com.ecoprint.printmanagement.service.UserActivityService;
 import com.ecoprint.printmanagement.service.UserService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -110,11 +114,33 @@ public class AuthController {
         return ResponseEntity.ok(new ApiResponse(true, usernameExists.toString()));
     }
     
+    @Operation(summary = "Register a new user", description = "User registration with profile picture upload")
+    @PostMapping("/registers")
+    public ResponseEntity<User> registerUser(
+            @RequestParam("username") String username,
+            @RequestParam("email") String email,
+            @RequestParam("password") String password,
+            @RequestParam("profilePicture") @Schema(description = "Profile picture to upload", type = "string", format = "binary") MultipartFile profilePicture) {
+        User user = new User();
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setPassword(password);  // In real applications, you should hash the password before storing
+		return null;
+
+    }
+    
     
     @PostMapping("/register")
     @Operation(summary = "Registers the user and publishes an event to generate the email verification")
-    public ResponseEntity<ApiResponse> registerUser(@Valid @RequestBody RegistrationRequest registrationRequest) {
-        return authService.registerUser(registrationRequest)
+    public ResponseEntity<ApiResponse> registerUser(
+    		@Valid @RequestParam("registrationRequest") String registrationRequest,
+    		@RequestParam("profilePic") @io.swagger.v3.oas.annotations.media.Schema(description = "Profile picture to upload", type = "string", format = "binary") MultipartFile profilePic
+    		) throws JsonMappingException, JsonProcessingException {
+    	ObjectMapper objectMapper = new ObjectMapper();
+    	objectMapper.registerModule(new JavaTimeModule());
+    	RegistrationRequest request = objectMapper.readValue(registrationRequest, RegistrationRequest.class);
+
+        return authService.registerUser(request, profilePic)
                 .map(user -> {
                     // Log registration activity
                     userActivityService.logUserActivity(user.getId(), "REGISTER", "User registered");
@@ -131,7 +157,7 @@ public class AuthController {
                     // Return success response
                     return ResponseEntity.ok(new ApiResponse(true, "User registered successfully. Check your email for verification."));
                 })
-                .orElseThrow(() -> new UserRegistrationException(registrationRequest.getEmail(), "Missing user object in database"));
+                .orElseThrow(() -> new UserRegistrationException(request.getEmail(), "Missing user object in database"));
     }
     
     

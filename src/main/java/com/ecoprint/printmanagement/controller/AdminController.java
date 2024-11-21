@@ -138,7 +138,7 @@ public class AdminController {
                 .collect(Collectors.toSet());
 
         // Update user in the service
-        User updatedUser = userService.updateUser(id, updatedUserData, newRoles);
+        User updatedUser = userService.updateUserByAdmin(id, updatedUserData, newRoles);
 
         // Trigger user account update event
         OnUserAccountChangeEvent userUpdateEvent = new OnUserAccountChangeEvent(updatedUser, "Update User", "Details updated successfully");

@@ -2,6 +2,8 @@ package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
 public class PrintHistoryDTO {
 	
     private Long id;

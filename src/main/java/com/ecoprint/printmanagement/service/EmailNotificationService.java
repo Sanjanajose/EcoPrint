@@ -1,7 +1,7 @@
 package com.ecoprint.printmanagement.service;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
@@ -9,46 +9,52 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import com.ecoprint.printmanagement.model.NotificationLog;
+import com.ecoprint.printmanagement.model.UserNotificationPreferences;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
+import com.ecoprint.printmanagement.repository.UserNotificationPreferencesRepository;
 
-@Service
+@Service("emailNotificationService")
 public class EmailNotificationService implements NotificationService {
 
     @Autowired
     private JavaMailSender mailSender;
 
     @Autowired
-    private UserService userService; // Service to get admin emails
+    private NotificationLogRepository notificationLogRepository;
     
     @Autowired
-    private NotificationLogRepository notificationLogRepository;
+    UserNotificationPreferencesRepository userNotificationPreferencesRepository;
 
     @Override
-    public void sendEmailNotification(String subject, String message) {
-        // Get list of admin emails
-        List<String> adminEmails = userService.getAdminEmails();
+    public void sendEmailNotification(String recipient, String subject, String message) {
+        SimpleMailMessage mailMessage = new SimpleMailMessage();
+        mailMessage.setTo(recipient);
+        mailMessage.setSubject(subject);
+        mailMessage.setText(message);
+        mailSender.send(mailMessage);
 
-        for (String email : adminEmails) {
-            SimpleMailMessage mailMessage = new SimpleMailMessage();
-            mailMessage.setTo(email);
-            mailMessage.setSubject(subject);
-            mailMessage.setText(message);
-            mailSender.send(mailMessage);
+        logNotification(recipient, message, "EMAIL");
+    }
 
-            // Log the notification
-            logNotification(email, message, "EMAIL");
+    @Override
+    public void sendPushNotification(String recipientId, String title, String message) {
+        throw new UnsupportedOperationException("Push notifications are not supported by EmailNotificationService.");
+    }
+
+    @Override
+    public void sendNotificationBasedOnPreferences(UserNotificationPreferences preferences, String title, String message) {
+        if (preferences.isPreferEmail()) {
+            sendEmailNotification(preferences.getUser().getEmail(), title, message);
         }
     }
+    
+    
+    
 
-    @Override
-    public void sendPushNotification(String title, String message) {
-        // Not implemented here, but can be implemented later
-    }
 
     private void logNotification(String recipient, String message, String type) {
-        // Log the notification
         NotificationLog log = new NotificationLog(recipient, message, type, LocalDateTime.now());
-        // Assuming you have a NotificationLogRepository
         notificationLogRepository.save(log);
     }
+    
 }
