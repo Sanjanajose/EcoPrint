@@ -839,7 +839,8 @@ this.pushNotificationService = pushNotificationService;
 		job.setFileName(jobRequest.getFileName()); // Reusing the uploaded file name
 		job.setPagesPrinted(jobRequest.getPages()); // Set pages from jobRequest
 		job.setFileData(existingJob.getFileData()); // Re-use the existing file data from previously uploaded job
-
+job.setFileType(existingJob.getFileType());
+job.setUploadTimestamp(LocalDateTime.now());
 		// Save the new job to the database
 		printJobRepository.save(job);
 
@@ -1070,7 +1071,7 @@ this.pushNotificationService = pushNotificationService;
 		return printHistoryMap;
 	}
 	
-
+/*
 	public List<ReadyJobResponse> getReadyJobs() {
 	    // Fetch the list of print jobs with status READY
 	    List<PrintJob> printJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
@@ -1093,7 +1094,7 @@ this.pushNotificationService = pushNotificationService;
 	    }).collect(Collectors.toList()); // Collect into a list
 	}
 
-	
+/*	
 	private int calculateEstimatedWaitTime(PrintJob job) {
 	    int jobsAhead = printJobRepository.countByStatusAndIdLessThan(PrintJobStatus.READY, job.getId());
 	    return jobsAhead * 5; // Each job takes 5 minutes
@@ -1175,5 +1176,5 @@ this.pushNotificationService = pushNotificationService;
 		}
 
 	
-
+*/
 }

@@ -353,7 +353,7 @@ public class PrintJobController {
         return ResponseEntity.ok("Print job reordered");
     }
 
-    
+ /*   
     @GetMapping("/ready-jobs")
     @Operation(summary = "Get Ready Jobs",
                description = "Retrieve a list of jobs that are ready to print with estimated wait times.")
@@ -385,5 +385,5 @@ public class PrintJobController {
     }
   
 
-
+*/
 }
