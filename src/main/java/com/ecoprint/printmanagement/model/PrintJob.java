@@ -31,7 +31,7 @@ public class PrintJob {
     @Column(name = "id") 
     private Long id;
  
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
     private User user;  // The user associated with this print job
  
@@ -70,10 +70,18 @@ public class PrintJob {
  
     // Queue Management
     @Column
-    private int queuePosition;
+    private Integer queuePosition;
  
  
-    // Print Details
+    public Integer getQueuePosition() {
+		return queuePosition;
+	}
+
+	public void setQueuePosition(Integer queuePosition) {
+		this.queuePosition = queuePosition;
+	}
+
+	// Print Details
     @NotNull(message = "Pages printed is mandatory")
     @Min(value = 1, message = "Pages printed must be at least 1")
     @Column(name="pages_printed", nullable = false)
@@ -114,6 +122,11 @@ public class PrintJob {
  
     @Column(name = "favorite_at")
     private LocalDateTime favoriteAt;
+    
+  //  @Column(name="retry_count")
+   // private int retryCount;
+
+    
  
     // Constructors
     public PrintJob() {}
@@ -147,8 +160,8 @@ public class PrintJob {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
  
-    public int getQueuePosition() { return queuePosition; }
-    public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
+  //  public int getQueuePosition() { return queuePosition; }
+    //public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
  
  
     public int getPagesPrinted() { return pagesPrinted; }
@@ -206,5 +219,7 @@ public class PrintJob {
     public void setPriority(Priority priority) {
         this.priority = priority;
     }
+
+	    
  
 }

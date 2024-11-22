@@ -1071,7 +1071,7 @@ job.setUploadTimestamp(LocalDateTime.now());
 		return printHistoryMap;
 	}
 	
-/*
+
 	public List<ReadyJobResponse> getReadyJobs() {
 	    // Fetch the list of print jobs with status READY
 	    List<PrintJob> printJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
@@ -1094,12 +1094,12 @@ job.setUploadTimestamp(LocalDateTime.now());
 	    }).collect(Collectors.toList()); // Collect into a list
 	}
 
-/*	
+	
 	private int calculateEstimatedWaitTime(PrintJob job) {
 	    int jobsAhead = printJobRepository.countByStatusAndIdLessThan(PrintJobStatus.READY, job.getId());
 	    return jobsAhead * 5; // Each job takes 5 minutes
 	}
-
+/*
 	   public void handleJobFailure(PrintJob job, FailureReason failureReason) {
 		    // Increment retry count
 		    job.setRetryCount(job.getRetryCount() + 1);
@@ -1130,7 +1130,7 @@ job.setUploadTimestamp(LocalDateTime.now());
 		   // jobRepository.save(job);
 		}
 	    
-
+/*
 	   public void processPrintJob(PrintJob job) {
 		    try {
 		        updateJobStatus(job.getId(), PrintJobStatus.QUEUED, "Print job added to queue");
