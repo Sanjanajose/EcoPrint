@@ -123,10 +123,6 @@ public class PrintJob {
     @Column(name = "favorite_at")
     private LocalDateTime favoriteAt;
     
-  //  @Column(name="retry_count")
-   // private int retryCount;
-
-    
  
     // Constructors
     public PrintJob() {}
@@ -159,10 +155,7 @@ public class PrintJob {
  
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
- 
-  //  public int getQueuePosition() { return queuePosition; }
-    //public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
- 
+  
  
     public int getPagesPrinted() { return pagesPrinted; }
     public void setPagesPrinted(int pagesPrinted) { this.pagesPrinted = pagesPrinted; }
