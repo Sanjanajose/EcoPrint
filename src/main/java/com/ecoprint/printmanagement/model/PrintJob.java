@@ -123,6 +123,21 @@ public class PrintJob {
     @Column(name = "favorite_at")
     private LocalDateTime favoriteAt;
     
+    @Column(name = "color",nullable = true)
+    private String color;
+
+
+
+    @Column(name = "duplex",nullable = true)
+    private Boolean duplex;
+
+
+
+    @Column(name = "paper_size",nullable = true)
+    private String paperSize;
+
+
+    
  
     // Constructors
     public PrintJob() {}
@@ -213,6 +228,31 @@ public class PrintJob {
         this.priority = priority;
     }
 
+	public String getColor() {
+		return color;
+	}
+
+	public void setColor(String color) {
+		this.color = color;
+	}
+
+	public Boolean getDuplex() {
+		return duplex;
+	}
+
+	public void setDuplex(Boolean duplex) {
+		this.duplex = duplex;
+	}
+
+	public String getPaperSize() {
+		return paperSize;
+	}
+
+	public void setPaperSize(String paperSize) {
+		this.paperSize = paperSize;
+	}
+  
+    
 	    
  
 }
