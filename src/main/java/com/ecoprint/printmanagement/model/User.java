@@ -57,6 +57,8 @@ public class User extends DateAudit {
     private Long id;
     
     
+    
+    
     @OneToOne(mappedBy = "user")
     private UserNotificationPreferences notificationPreferences;
 
@@ -135,6 +137,10 @@ public class User extends DateAudit {
             @JoinColumn(name = "USER_ID", referencedColumnName = "USER_ID")}, inverseJoinColumns = {
             @JoinColumn(name = "ROLE_ID", referencedColumnName = "ROLE_ID")})
     private Set<Role> roles = new HashSet<>();
+    
+    
+    
+    
 
     @ManyToOne
     @JoinColumn(name = "company_id")
@@ -149,6 +155,8 @@ public class User extends DateAudit {
 		this.companyDetails = companyDetails;
 	}
 
+	
+	
     @ElementCollection(fetch = FetchType.EAGER)
     @Enumerated(EnumType.STRING)
     @CollectionTable(name = "user_permissions", joinColumns = @JoinColumn(name = "user_id"))

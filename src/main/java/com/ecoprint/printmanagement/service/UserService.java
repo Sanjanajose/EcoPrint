@@ -484,11 +484,33 @@ public class UserService {
 						// PrintJobService.
 	}
 
-	public List<User> getUsersByRole(String roleName) {
+	/*public List<User> getUsersByRole(String roleName) {
 		Role adminRole = roleRepository.findByName(roleName)
 				.orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
 		return userRepository.findByRolesContaining(adminRole);
-	}
+	}*/
+	
+	public List<User> getUsersByRole(String roleName) {
+        // Convert role name to RoleName enum
+        RoleName roleNameEnum;
+        try {
+            roleNameEnum = RoleName.valueOf(roleName.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid role name: " + roleName, ex);
+        }
+ 
+        // Fetch the Role entity
+        Role role = roleRepository.findByRole(roleNameEnum)
+                .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleNameEnum));
+ 
+        // Fetch users associated with the role
+        return userRepository.findByRolesContaining(role);
+    }
+ 
+
+
+	
+	
 	
 	public String getDeviceTokenByUserId(long userId) {
 	    return userDeviceRepository.findDeviceTokenByUserId(userId)

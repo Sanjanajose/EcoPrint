@@ -21,23 +21,25 @@ public class UserNotificationPreferences {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "job_completed")
-    private boolean jobCompletedNotificationEnabled;
+    @Column(name = "job_completed",nullable = true)
+    private boolean jobCompletedNotificationEnabled= true; // Default value
 
-    @Column(name = "job_failed")
-    private boolean jobFailedNotificationEnabled;
 
-    @Column(name = "prefer_in_app", nullable = false)
-    private boolean preferInApp; // Added field for in-app alerts preference
+    @Column(name = "job_failed",nullable = true)
+    private boolean jobFailedNotificationEnabled = true;
 
-    @Column(name = "prefer_email", nullable = false)
-    private boolean preferEmail; // Added field for email notifications preference
+    @Column(name = "prefer_in_app", nullable = true)
+    private boolean preferInApp =true; // Added field for in-app alerts preference
+
+    @Column(name = "prefer_email", nullable = true)
+    private boolean preferEmail=true; // Added field for email notifications preference
 
     // Getters and setters
 
     public Long getId() {
         return id;
     }
+    
 
     public void setId(Long id) {
         this.id = id;

@@ -31,9 +31,14 @@ public class PrintJob {
     @Column(name = "id") 
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    /*@ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
-    private User user;  // The user associated with this print job
+    private User user;  // The user associated with this print job */
+    
+    
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id", nullable = false) // Ensure the column name is 'user_id'
+    private User user;
 
     
     @Enumerated(EnumType.STRING)
@@ -72,6 +77,9 @@ public class PrintJob {
     // Queue Management
     @Column
     private int queuePosition;
+    
+    @Column(nullable = false)
+    private boolean favorite = false;
 
 
     // Print Details
@@ -117,7 +125,9 @@ public class PrintJob {
     private LocalDateTime favoriteAt;
 
     // Constructors
-    public PrintJob() {}
+    public PrintJob() {
+    	this.priority = Priority.HIGH;
+    }
 
     // Getters and Setters
 
@@ -207,6 +217,14 @@ public class PrintJob {
 
     public void setPriority(Priority priority) {
         this.priority = priority;
+    }
+    
+    public boolean isFavorite() {
+        return favorite;
+    }
+
+    public void setFavorite(boolean favorite) {
+        this.favorite = favorite;
     }
 
 }

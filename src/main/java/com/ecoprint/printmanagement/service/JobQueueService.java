@@ -33,7 +33,6 @@ public class JobQueueService {
                 PrintJobStatus.PRINTING,
                 PrintJobStatus.COMPLETED,
                 PrintJobStatus.FAILED,
-                PrintJobStatus.FAVORITE,
                 PrintJobStatus.DELETED
             )
         );
