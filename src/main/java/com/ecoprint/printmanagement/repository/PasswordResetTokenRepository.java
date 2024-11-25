@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.ecoprint.printmanagement.model.PasswordResetToken;
@@ -30,4 +32,9 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
 
     @Query("SELECT t FROM PASSWORD_RESET_TOKEN t WHERE t.active = true and t.user = :user")
     List<PasswordResetToken> findActiveTokensForUser(User user);
+
+	@Modifying
+@Query("DELETE FROM PASSWORD_RESET_TOKEN e WHERE e.user.id = :userId")
+void deleteByUserId(@Param("userId") Long userId);
+
 }

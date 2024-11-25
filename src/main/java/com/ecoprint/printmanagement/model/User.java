@@ -14,13 +14,16 @@
 package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDate;
+
 import java.util.HashSet;
 import java.util.Set;
+import java.util.*;
 
 import org.hibernate.annotations.NaturalId;
 
 import com.ecoprint.printmanagement.model.audit.DateAudit;
 import com.ecoprint.printmanagement.validation.annotation.NullOrNotBlank;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
@@ -57,7 +60,7 @@ public class User extends DateAudit {
     private Long id;
     
     
-    
+   
     
     @OneToOne(mappedBy = "user")
     private UserNotificationPreferences notificationPreferences;
@@ -379,6 +382,7 @@ public class User extends DateAudit {
                 ", isEmailVerified=" + isEmailVerified +
                 '}';
     }
+    
     
  
 }

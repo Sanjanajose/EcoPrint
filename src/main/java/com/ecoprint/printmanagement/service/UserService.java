@@ -13,6 +13,7 @@
  */
 package com.ecoprint.printmanagement.service;
 
+import java.awt.print.Pageable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +33,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -54,6 +56,8 @@ import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.UserDeviceRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+import org.springframework.data.domain.Page;
+
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -516,6 +520,15 @@ public class UserService {
 	    return userDeviceRepository.findDeviceTokenByUserId(userId)
 	            .orElseThrow(() -> new ResourceNotFoundException("Device token not found for userId: " + userId));
 	}
+	
+	public User getCurrentUser() {
+	    String username = SecurityContextHolder.getContext().getAuthentication().getName();
+	    return userRepository.findByUsername(username)
+	            .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
+	}
+
+	
+	
 
 
 }

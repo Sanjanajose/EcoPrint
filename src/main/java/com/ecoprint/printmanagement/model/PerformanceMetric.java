@@ -19,7 +19,7 @@ public class PerformanceMetric {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)
     private User user;
 
     @Column(name = "metric_type", nullable = false, length = 50)

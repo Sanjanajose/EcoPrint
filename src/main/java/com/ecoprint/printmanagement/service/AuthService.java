@@ -20,6 +20,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -158,18 +159,22 @@ public class AuthService {
      * @param password The password of the user.
      * @return User if credentials are valid; null otherwise.
      */
-    public User validateUserCredentials(String username, String password) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
-        
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            if (passwordEncoder.matches(password, user.getPassword())) {
-                return user;
-            }
+    public User validateUserCredentials(String identifier, String password) {
+        User user;
+        if (identifier.contains("@")) { // Simple check to determine if it's an email
+            user = userRepository.findByEmail(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "email", identifier));
+        } else {
+            user = userRepository.findByUsername(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "username", identifier));
         }
-        
-        return null; // Invalid credentials
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            throw new BadCredentialsException("Invalid username/email or password");
+        }
+        return user;
     }
+
 
 
 
@@ -268,7 +273,7 @@ public class AuthService {
     
     public Optional<Authentication> authenticateUser(LoginRequest loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
+            new UsernamePasswordAuthenticationToken(loginRequest.getIdentifier(), loginRequest.getPassword())
         );
 
         
