@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -67,7 +68,6 @@ public class PrintJobService {
 	@Autowired
 	private PrintJobRepository printJobRepository;
 	
-	
     @Autowired
     private UserNotificationPreferencesService userNotificationPreferencesService;
 
@@ -86,6 +86,11 @@ public class PrintJobService {
 
 	@Autowired
 	private UserService userService; // To get current user info
+	
+    @Lazy
+    @Autowired
+    private FailedJobService failedJobService;
+
 	
 
 	private final Tika tika = new Tika();
@@ -751,6 +756,7 @@ public class PrintJobService {
 	}
 
 	public PrintJob findJobIfAuthorized(Long jobId) {
+		System.out.println("jobId::in findJobIfAuthorized"+jobId);
 		PrintJob job = printJobRepository.findById(jobId)
 				.orElseThrow(() -> new ResourceNotFoundException("Job not found"));
 
@@ -1052,6 +1058,28 @@ public class PrintJobService {
 		return printHistoryMap;
 	}
 	
+    public void handlePrintJobFailure(PrintJob printJob, String errorDetails) {
+        // Log the failure
+    	failedJobService.logFailedJob(printJob, errorDetails, "System");
+
+        // Update the print job status
+        printJob.setStatus(PrintJobStatus.FAILED);
+        // Save the print job (use your existing repository)
+    }
+    
+    
+    public void retryPrintJob(PrintJob printJob) {
+        try {
+            // Add logic to retry the print job
+            printJob.setStatus(PrintJobStatus.READY); // Update status
+            printJobRepository.save(printJob); // Save the updated print job
+            System.out.println("Print job retried successfully: " + printJob.getFileName());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to retry print job: " + e.getMessage());
+        }
+    }
+
+
 	
 
 }

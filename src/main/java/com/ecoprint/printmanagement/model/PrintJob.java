@@ -1,10 +1,12 @@
 package com.ecoprint.printmanagement.model;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.ecoprint.printmanagement.util.Base64Serializer;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,6 +18,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
@@ -31,9 +34,14 @@ public class PrintJob {
     @Column(name = "id") 
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
-    private User user;  // The user associated with this print job
+    //@ManyToOne(fetch = FetchType.LAZY)
+    //@JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
+    //private User user;  // The user associated with this print job
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id", nullable = false) // Ensure the column name is 'user_id'
+    private User user;
+
 
     
     @Enumerated(EnumType.STRING)
@@ -115,6 +123,15 @@ public class PrintJob {
 
     @Column(name = "favorite_at")
     private LocalDateTime favoriteAt;
+    
+    @OneToMany(mappedBy = "printJob", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FailedJob> failedJobs;
+    
+    @ManyToOne
+    @JoinColumn(name = "printer_id", nullable = false)
+    private Printer printer;
+
+
 
     // Constructors
     public PrintJob() {}
@@ -208,5 +225,23 @@ public class PrintJob {
     public void setPriority(Priority priority) {
         this.priority = priority;
     }
+
+	public List<FailedJob> getFailedJobs() {
+		return failedJobs;
+	}
+
+	public void setFailedJobs(List<FailedJob> failedJobs) {
+		this.failedJobs = failedJobs;
+	}
+
+	public Printer getPrinter() {
+		return printer;
+	}
+
+	public void setPrinter(Printer printer) {
+		this.printer = printer;
+	}
+    
+    
 
 }
