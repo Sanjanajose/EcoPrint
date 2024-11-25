@@ -210,6 +210,36 @@ this.pushNotificationService = pushNotificationService;
         Assert.notNull(submittedJob.getStatus(), "Job status must not be null");
         submitJobRepository.save(submittedJob);
         Long currentUserId = getCurrentUserId();
+		PrintJob printJob = new PrintJob();
+		printJob.setFileName(fileName); // Set file name
+		printJob.setFileType(fileType); // Set file type
+		printJob.setFileSize(file.getSize()); // Set file size
+		printJob.setUser(user); // Set the User entity
+		printJob.setUserName(user.getUsername()); // Populate the userName field
+		printJob.setUploadTimestamp(LocalDateTime.now()); // Timestamp for upload
+		printJob.setFileData(fileData); // Set the file data
+		printJob.setDescription(description); // Set description
+		printJob.setPagesPrinted(pagesPrinted); // Set pages printed
+		//printJob.setCost(cost); // Set cost
+		printJob.setStatus(PrintJobStatus.SUBMITTED); // Set job status as SUBMITTED
+		printJob.setSubmittedAt(LocalDateTime.now()); // Set submission timestamp
+		printJobRepository.save(printJob);
+		// Log job submission
+
+		// Step 8: Log the job submission action
+		logJobAction(printJob.getId(), // Job ID
+				PrintJobStatus.SUBMITTED, // Previous status (if any)
+				PrintJobStatus.SUBMITTED, // Updated status (after file upload)
+				currentUserId, // Current user ID (assuming a method to get it)
+				"Job submitted with file upload", // Log message
+				Optional.of(printJob.getUserName()), // User name (optional)
+				Optional.empty(), // No position info (optional)
+				Optional.empty(), // No position info (optional)
+				"file_upload", // Action type (e.g., file upload)
+				Optional.of(fileName), // File name (passed as Optional)
+				Optional.of(file.getSize()) // File size (passed as Optional)
+		);
+
 
     }
 
