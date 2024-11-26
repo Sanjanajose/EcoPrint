@@ -255,4 +255,15 @@ public class RoleService {
     }
 
     
+
+    public Set<RoleName> getRolesByUserId(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+        return user.getRoles().stream()
+                .map(Role::getRole)
+                .collect(Collectors.toSet());
+    }
+
+
+
 }
