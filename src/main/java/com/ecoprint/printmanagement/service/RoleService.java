@@ -244,5 +244,14 @@ public class RoleService {
         roleChangeLogRepository.save(log);
     }
 
+    
+    public Set<RoleName> getRolesByUserId(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+        return user.getRoles().stream()
+                .map(Role::getRole)
+                .collect(Collectors.toSet());
+    }
+
 
 }
