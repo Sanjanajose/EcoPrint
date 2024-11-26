@@ -16,6 +16,7 @@ package com.ecoprint.printmanagement.model.payload;
 import com.ecoprint.printmanagement.validation.annotation.NullOrNotBlank;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 
@@ -30,6 +31,8 @@ public class RegistrationRequest {
     @Schema(name = "A valid email", required = true, allowableValues = "NonEmpty String")
     private String email;
 
+    
+    @NotBlank(message = "Password cannot be blank")
     @NotNull(message = "Registration password cannot be null")
     @Schema(name = "A valid password string", required = true, allowableValues = "NonEmpty String")
     private String password;

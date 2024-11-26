@@ -8,15 +8,17 @@ public class DeletedJobResponse {
     private LocalDateTime deletedAt;
     private String deletedByUsername;
     private String reasonForDeletion;
+    private String fileName;
+    
 
     // Constructor
-    public DeletedJobResponse(Long id, LocalDateTime deletedAt, String deletedByUsername, String reasonForDeletion) {
+    public DeletedJobResponse(Long id, LocalDateTime deletedAt, String reasonForDeletion, String fileName, String deletedByUsername) {
         this.id = id;
         this.deletedAt = deletedAt;
-        this.deletedByUsername = deletedByUsername;
         this.reasonForDeletion = reasonForDeletion;
+        this.fileName = fileName;
+        this.deletedByUsername = deletedByUsername;
     }
-
     // Getters and Setters
     public Long getId() {
         return id;
@@ -48,5 +50,15 @@ public class DeletedJobResponse {
 
     public void setReasonForDeletion(String reasonForDeletion) {
         this.reasonForDeletion = reasonForDeletion;
+    }
+    
+    
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
     }
 }

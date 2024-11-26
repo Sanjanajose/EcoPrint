@@ -20,6 +20,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserDevice;
 import com.ecoprint.printmanagement.model.token.RefreshToken;
 
@@ -39,5 +40,13 @@ public interface UserDeviceRepository extends JpaRepository<UserDevice, Long> {
         @Query("SELECT ud.notificationToken FROM USER_DEVICE ud WHERE ud.user.id = :userId")
         Optional<String> findDeviceTokenByUserId(@Param("userId") long userId);
     
+        
+        
+            Optional<UserDevice> findByDeviceId(String deviceId);
+            
+            
+            void deleteByDeviceId(String deviceId);
+        
+            List<UserDevice> findAllByUserId(Long userId);
 
 }

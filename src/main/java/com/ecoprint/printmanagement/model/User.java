@@ -40,6 +40,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
@@ -142,9 +143,11 @@ public class User extends DateAudit {
     private Set<Role> roles = new HashSet<>();
     
     
-    
-    
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<UserDevice> devices = new HashSet<>();
 
+    
+    
     @ManyToOne
     @JoinColumn(name = "company_id")
     private CompanyDetails companyDetails;
@@ -382,6 +385,11 @@ public class User extends DateAudit {
                 ", isEmailVerified=" + isEmailVerified +
                 '}';
     }
+
+	public boolean isAdmin() {
+		// TODO Auto-generated method stub
+		return false;
+	}
     
     
  

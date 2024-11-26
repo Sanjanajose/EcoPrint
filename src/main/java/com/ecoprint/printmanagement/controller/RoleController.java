@@ -3,6 +3,8 @@ package com.ecoprint.printmanagement.controller;
 import com.ecoprint.printmanagement.model.Permission;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.service.RoleService;
+import java.util.List; 
+
 
 import io.swagger.v3.oas.annotations.Operation;
 
@@ -11,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Set;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/admin/roles")
@@ -87,4 +89,11 @@ public class RoleController {
         return ResponseEntity.ok("Role revoked successfully");
     }
 
+    @Operation(summary = "Fetch all available roles")
+    @GetMapping("/roles/all")
+    public ResponseEntity<List<String>> getAllRoles() {
+        List<String> roles = roleService.getAllRoles();
+        return ResponseEntity.ok(roles);
+    }
+    
 }

@@ -77,6 +77,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM USER u LEFT JOIN FETCH u.backupCodes")
     Page<User> findAllWithBackupCodes(Pageable pageable);
 
+    Optional<User> findByUsernameOrEmail(String username, String email);
     
-    
+    @Query("SELECT u FROM USER u WHERE LOWER(u.email) = LOWER(:identifier) OR LOWER(u.username) = LOWER(:identifier)")
+    Optional<User> findByIdentifier(@Param("identifier") String identifier);
 }
+    
+

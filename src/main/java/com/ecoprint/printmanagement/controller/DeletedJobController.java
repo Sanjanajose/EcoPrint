@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.controller;
 
 import com.ecoprint.printmanagement.model.DeletedJob;
+import com.ecoprint.printmanagement.model.DeletionAuditLog;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.RoleName;
@@ -10,6 +11,8 @@ import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.service.DeletedJobService;
 import com.ecoprint.printmanagement.service.ReportExportService;
 
+import io.jsonwebtoken.io.IOException;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 
 import com.ecoprint.printmanagement.dto.DeletedJobResponse;
@@ -27,10 +30,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
+import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.List;
+
+import org.springframework.http.MediaType;
+
 
 @RestController
 @RequestMapping("/api/deleted-jobs")
@@ -45,7 +53,9 @@ public class DeletedJobController {
     @Autowired
     private UserRepository userRepository;
 
-    private final ReportExportService reportExportService;
+    
+    @Autowired
+    private  ReportExportService reportExportService;
 
     @Autowired
     public DeletedJobController(ReportExportService reportExportService) {
@@ -99,40 +109,61 @@ public class DeletedJobController {
         deletedJobService.restoreDeletedJob(jobId, userId);
         return ResponseEntity.ok("Job restored successfully.");
     }
-    @Transactional
+    
+    /**
+     * Get the deleted jobs report, filtered by date and user.
+     * @throws AccessDeniedException 
+     */
     @GetMapping("/report")
-    public ResponseEntity<List<DeletedJobResponse>> getDeletedJobsReport(
+    public ResponseEntity<?> getDeletedJobsReport(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(required = false) Long userId) throws AccessDeniedException {
+            @RequestParam(required = false) Long userId,
+            Principal principal) throws AccessDeniedException {
 
-        // Delegating access control and report fetching to the service
-        List<DeletedJobResponse> report = deletedJobService.getDeletedJobsReportWithAccessControl(startDate, endDate, userId);
-        return ResponseEntity.ok(report);
+        // Fetch the requesting user
+        User requestingUser = userRepository.findByUsername(principal.getName())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", principal.getName()));
+
+        // Fetch the report
+        List<DeletionAuditLog> logs = deletedJobService.getDeletedJobsReport(startDate, endDate, userId, requestingUser);
+
+        return ResponseEntity.ok(logs);
     }
 
-
-
-    @GetMapping("/export/csv")
-    public ResponseEntity<Resource> exportDeletedJobsReport(
+    /**
+     * Export deleted jobs report as a CSV file.
+     * @throws java.io.IOException 
+     */
+    @GetMapping("/report/export")
+    public void exportDeletedJobsReport(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(required = false) Long userId) throws AccessDeniedException {
+            @RequestParam(required = false) Long userId,
+            Principal principal,
+            HttpServletResponse response) throws IOException, java.io.IOException {
 
-        List<DeletedJobResponse> report = deletedJobService.getDeletedJobsReport(startDate, endDate, userId);
+        // Fetch the requesting user
+        User requestingUser = userRepository.findByUsername(principal.getName())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", principal.getName()));
 
-        if (report.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.SC_NO_CONTENT)
-                    .body(new InputStreamResource(new ByteArrayInputStream("No data found.".getBytes(StandardCharsets.UTF_8))));
+        // Fetch the report
+        List<DeletionAuditLog> logs = deletedJobService.getDeletedJobsReport(startDate, endDate, userId, requestingUser);
+
+        // Write to CSV
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=deleted_jobs_report.csv");
+
+        try (PrintWriter writer = response.getWriter()) {
+            writer.println("Job ID,Deleted By User ID,Document Name,Deletion Time,Reason For Deletion");
+            for (DeletionAuditLog log : logs) {
+                writer.printf("%d,%d,%s,%s,%s%n",
+                        log.getJobId(),
+                        log.getDeletedByUserId(),
+                        log.getDocumentName(),
+                        log.getDeletionTime(),
+                        log.getReasonForDeletion());
+            }
         }
-
-        String csv = reportExportService.generateCSVReport(report);
-        InputStreamResource resource = new InputStreamResource(new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)));
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=deleted-jobs-report.csv")
-                .contentType(MediaType.TEXT_PLAIN)
-                .body(resource);
     }
-
 }

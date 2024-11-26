@@ -12,11 +12,12 @@ import com.ecoprint.printmanagement.repository.DeletionAuditLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import java.util.List;
-
+import java.util.stream.Collectors;
 
 import jakarta.transaction.Transactional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.AccessDeniedException;
@@ -171,48 +172,29 @@ public class DeletedJobService {
 
     }
     
+    
+   @Transactional
+    public List<DeletionAuditLog> getDeletedJobsReport(LocalDateTime startDate, LocalDateTime endDate, Long userId, User requestingUser) throws AccessDeniedException {
+        // Only job owner or admin can access the report
+        if (!requestingUser.isAdmin() && !requestingUser.getId().equals(userId)) {
+         throw new AccessDeniedException("You do not have permission to access this report.");
+        }
+
+        return deletionAuditLogRepository.findAll().stream()
+                .filter(log -> (userId == null || log.getDeletedByUserId().equals(userId)))
+               .filter(log -> (startDate == null || !log.getDeletionTime().isBefore(startDate)))
+               .filter(log -> (endDate == null || !log.getDeletionTime().isAfter(endDate)))
+                .collect(Collectors.toList());
+    }
+    
     //public List<DeletedJobResponse> getDeletedJobsReport(LocalDateTime startDate, LocalDateTime endDate, Long userId) {
       //  return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, userId);
     //}
-    
-    public List<DeletedJobResponse> getDeletedJobsReport(LocalDateTime startDate, LocalDateTime endDate, Long userId) throws AccessDeniedException {
-        // Get the currently authenticated user
-        User currentUser = userservice.getCurrentUser();
-
-        // If the user is an admin, they can view all reports
-        if (currentUser.getRoles().contains("ROLE_ADMIN")) {
-            return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, userId);
-        }
-
-        // If the user is not an admin, ensure they can view only their own jobs
-        if (userId != null && !userId.equals(currentUser.getId())) {
-            throw new AccessDeniedException("You are not authorized to view other users' reports.");
-        }
-
-        return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, currentUser.getId());
-    }
-
-    
-    public List<DeletedJobResponse> getDeletedJobsReportWithAccessControl(
-            LocalDateTime startDate, LocalDateTime endDate, Long userId) throws AccessDeniedException {
-
-        // Get the currently logged-in user
-        User currentUser = userservice.getCurrentUser();
-
-        // Admins can view all reports
-        if (currentUser.getRoles().contains("ROLE_ADMIN")) {
-            return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, userId);
-        }
-
-        // For regular users, restrict to their own jobs
-        if (userId != null && !userId.equals(currentUser.getId())) {
-            throw new AccessDeniedException("You are not authorized to view other users' reports.");
-        }
-
-        // Fetch report for the current user only
-        return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, currentUser.getId());
-    }
+   
 }
+    
+    
+
 
 
 

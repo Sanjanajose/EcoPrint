@@ -110,5 +110,10 @@ public class Role {
     public void setPermissions(Set<Permission> permissions) {
         this.permissions = permissions;
     }
+    
+    
+    public String getRoleName() {
+        return role != null ? role.name() : null;
+    }
 
 }

@@ -14,11 +14,14 @@
 package com.ecoprint.printmanagement.service;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -37,10 +40,12 @@ import com.ecoprint.printmanagement.exception.SetAdminAccessException;
 import com.ecoprint.printmanagement.exception.TokenRefreshException;
 import com.ecoprint.printmanagement.exception.UpdatePasswordException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+import com.ecoprint.printmanagement.model.DeviceType;
 import com.ecoprint.printmanagement.model.PasswordResetToken;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserDevice;
 import com.ecoprint.printmanagement.model.UserNotificationPreferences;
+import com.ecoprint.printmanagement.model.payload.JwtAuthenticationResponse;
 import com.ecoprint.printmanagement.model.payload.LoginRequest;
 import com.ecoprint.printmanagement.model.payload.PasswordResetLinkRequest;
 import com.ecoprint.printmanagement.model.payload.PasswordResetRequest;
@@ -99,9 +104,12 @@ public class AuthService {
     @Transactional
     public Optional<User> registerUser(RegistrationRequest newRegistrationRequest, MultipartFile profilePicture) {
         String newRegistrationRequestEmail = newRegistrationRequest.getEmail();
+        newRegistrationRequest.setRegisterAsAdmin(false);
         if (emailAlreadyExists(newRegistrationRequestEmail)) {
             throw new ResourceAlreadyInUseException("Email", "Address", newRegistrationRequestEmail);
         }
+        
+        
         User newUser = userService.createUser(newRegistrationRequest, profilePicture);
         User registeredNewUser = userService.save(newUser);
         
@@ -399,4 +407,36 @@ public class AuthService {
 
         return currentUser;
     }
+    
+    public ResponseEntity<?> generateTokensWithDevice(User user, String deviceId) {
+        // Add custom claims
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("deviceId", deviceId); // Include deviceId as a custom claim
+
+        // Generate JWT
+        String jwtToken = tokenProvider.createToken(user.getUsername(), claims);
+
+        // Generate Refresh Token and associate it with the device
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken();
+        
+        
+        UserDevice userDevice = userDeviceService.registerOrRetrieveDevice (
+                user.getId(), deviceId, null, null // Assuming null for DeviceType and notificationToken
+        );
+        userDevice.setRefreshToken(refreshToken);
+        refreshToken.setUserDevice(userDevice);
+        refreshTokenService.save(refreshToken);
+
+        // Log activity
+        activityLogService.logActivity("LOGIN", user.getUsername(), user.getId(), "User logged in with device: " + deviceId);
+
+        // Return the response
+        return ResponseEntity.ok(new JwtAuthenticationResponse(jwtToken, refreshToken.getToken(), tokenProvider.getExpiryDuration(), jwtToken));
+    }
+
+    public RefreshToken getRefreshToken(String refreshToken) {
+        return refreshTokenService.findByToken(refreshToken)
+                .orElseThrow(() -> new TokenRefreshException(refreshToken, "Refresh token is not found."));
+    }
+
 }

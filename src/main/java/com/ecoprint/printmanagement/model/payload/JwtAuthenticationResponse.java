@@ -22,12 +22,15 @@ public class JwtAuthenticationResponse {
     private String tokenType;
 
     private Long expiryDuration;
+    
+    private String deviceId;
 
-    public JwtAuthenticationResponse(String accessToken, String refreshToken, Long expiryDuration) {
+    public JwtAuthenticationResponse(String accessToken, String refreshToken, Long expiryDuration, String deviceId) {
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;
         this.expiryDuration = expiryDuration;
         tokenType = "Bearer ";
+        this.deviceId = deviceId;
     }
 
     public String getAccessToken() {
@@ -61,4 +64,16 @@ public class JwtAuthenticationResponse {
     public void setExpiryDuration(Long expiryDuration) {
         this.expiryDuration = expiryDuration;
     }
+
+	public String getDeviceId() {
+		return deviceId;
+	}
+
+	public void setDeviceId(String deviceId) {
+		this.deviceId = deviceId;
+	}
+    
+    
+    
+    
 }
