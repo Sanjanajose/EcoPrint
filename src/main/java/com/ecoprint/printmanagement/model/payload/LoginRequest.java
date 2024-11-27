@@ -16,20 +16,15 @@ package com.ecoprint.printmanagement.model.payload;
 import com.ecoprint.printmanagement.validation.annotation.NullOrNotBlank;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.Column;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 @Schema(name = "Login Request", description = "The login request payload")
 public class LoginRequest {
 
-    @NullOrNotBlank(message = "Login Username can be null but not blank")
-    @Schema(name = "Registered username", allowableValues = "NonEmpty String")
-    private String username;
-
-    @NullOrNotBlank(message = "Login Email can be null but not blank")
-    @Schema(name = "User registered email", required = true, allowableValues = "NonEmpty String")
-    private String email;
+    @NullOrNotBlank(message = "Identifier can be null but not blank")
+    @Schema(name = "Username or Email", required = true, allowableValues = "NonEmpty String", description = "The user identifier, can be either username or email")
+    private String identifier; // Accepts either username or email
 
     @NotNull(message = "Login password cannot be blank")
     @Schema(name = "Valid user password", required = true, allowableValues = "NonEmpty String")
@@ -37,46 +32,34 @@ public class LoginRequest {
 
     @Valid
     @NotNull(message = "Device info cannot be null")
-    @Schema(name = "Device info", required = true, type = "object", allowableValues = "A valid " +
-            "deviceInfo object")
+    @Schema(name = "Device info", required = true, type = "object", allowableValues = "A valid deviceInfo object")
     private DeviceInfo deviceInfo;
-    
-    @Column(name = "otp", nullable = false)
-    private String otp;// Optional field for 2FA
 
-    
-    
+    @Schema(name = "OTP", description = "Optional field for two-factor authentication")
+    private String otp; // Optional field for 2FA
 
-    
     private boolean rememberMe;
 
-    
-
-    public LoginRequest(String username, String email, String password, DeviceInfo deviceInfo, boolean rememberMe ) {
-        this.username = username;
-        this.email = email;
+    // Constructor with all fields
+    public LoginRequest(String identifier, String password, DeviceInfo deviceInfo, String otp, boolean rememberMe) {
+        this.identifier = identifier;
         this.password = password;
         this.deviceInfo = deviceInfo;
-        this.rememberMe =rememberMe;
+        this.otp = otp;
+        this.rememberMe = rememberMe;
     }
 
+    // Default constructor
     public LoginRequest() {
     }
 
-    public String getUsername() {
-        return username;
+    // Getters and Setters
+    public String getIdentifier() {
+        return identifier;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
+    public void setIdentifier(String identifier) {
+        this.identifier = identifier;
     }
 
     public String getPassword() {
@@ -94,22 +77,20 @@ public class LoginRequest {
     public void setDeviceInfo(DeviceInfo deviceInfo) {
         this.deviceInfo = deviceInfo;
     }
-    
+
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
+    }
+
     public boolean isRememberMe() {
         return rememberMe;
     }
-    
+
     public void setRememberMe(boolean rememberMe) {
         this.rememberMe = rememberMe;
     }
-
-	public String getOtp() {
-		return otp;
-	}
-
-	public void setOtp(String otp) {
-		this.otp = otp;
-	}
-    
-    
 }

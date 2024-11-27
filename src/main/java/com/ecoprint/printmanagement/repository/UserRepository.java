@@ -13,6 +13,7 @@
  */
 package com.ecoprint.printmanagement.repository;
 
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +26,9 @@ import org.springframework.stereotype.Repository;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 
 
 @Repository
@@ -68,13 +72,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByRolesContaining(Role role);
     
-    
-    
-    
-    
 
 
-    
+    @Query("SELECT u FROM USER u LEFT JOIN FETCH u.backupCodes")
+    Page<User> findAllWithBackupCodes(Pageable pageable);
+
     
     
     

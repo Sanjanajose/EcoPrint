@@ -20,8 +20,11 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,6 +40,7 @@ import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.PasswordResetToken;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserDevice;
+import com.ecoprint.printmanagement.model.UserNotificationPreferences;
 import com.ecoprint.printmanagement.model.payload.LoginRequest;
 import com.ecoprint.printmanagement.model.payload.PasswordResetLinkRequest;
 import com.ecoprint.printmanagement.model.payload.PasswordResetRequest;
@@ -45,6 +49,7 @@ import com.ecoprint.printmanagement.model.payload.TokenRefreshRequest;
 import com.ecoprint.printmanagement.model.payload.UpdatePasswordRequest;
 import com.ecoprint.printmanagement.model.token.EmailVerificationToken;
 import com.ecoprint.printmanagement.model.token.RefreshToken;
+import com.ecoprint.printmanagement.repository.UserNotificationPreferencesRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.security.JwtTokenProvider;
 import com.ecoprint.printmanagement.service.ActivityLogService;
@@ -69,6 +74,9 @@ public class AuthService {
     
     @Autowired
     UserRepository userRepository;
+    
+    @Autowired
+    UserNotificationPreferencesRepository usernotificationpreferencerepository;
 
     @Autowired
     public AuthService(UserService userService, JwtTokenProvider tokenProvider,
@@ -96,6 +104,10 @@ public class AuthService {
         }
         User newUser = userService.createUser(newRegistrationRequest, profilePicture);
         User registeredNewUser = userService.save(newUser);
+        
+     // Create default notification preferences
+        createDefaultNotificationPreferences(registeredNewUser);
+
 
         // Log the registration action
         activityLogService.logActivity("User registered", registeredNewUser.getUsername(), registeredNewUser.getId(),
@@ -112,6 +124,32 @@ public class AuthService {
         return userService.existsByUsername(username);
     }
     
+    
+    
+ // Method to create default notification preferences for a user
+    private void createDefaultNotificationPreferences(User user) {
+        UserNotificationPreferences preferences = new UserNotificationPreferences();
+        preferences.setUser(user); // Assuming you have a relationship with the User entity
+        preferences.setPreferEmail(true); // Default value
+        preferences.setPreferInApp(true); // Default value
+        preferences.setJobCompletedNotificationEnabled(true); // Default value
+        preferences.setJobFailedNotificationEnabled(true); // Default value
+
+        
+        usernotificationpreferencerepository.save(preferences);
+    }
+    
+    public User getAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("User is not authenticated");
+        }
+
+        String username = authentication.getName();
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
+    }
         
     
     /**
@@ -121,18 +159,22 @@ public class AuthService {
      * @param password The password of the user.
      * @return User if credentials are valid; null otherwise.
      */
-    public User validateUserCredentials(String username, String password) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
-        
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            if (passwordEncoder.matches(password, user.getPassword())) {
-                return user;
-            }
+    public User validateUserCredentials(String identifier, String password) {
+        User user;
+        if (identifier.contains("@")) { // Simple check to determine if it's an email
+            user = userRepository.findByEmail(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "email", identifier));
+        } else {
+            user = userRepository.findByUsername(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "username", identifier));
         }
-        
-        return null; // Invalid credentials
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            throw new BadCredentialsException("Invalid username/email or password");
+        }
+        return user;
     }
+
 
 
 
@@ -231,7 +273,7 @@ public class AuthService {
     
     public Optional<Authentication> authenticateUser(LoginRequest loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
+            new UsernamePasswordAuthenticationToken(loginRequest.getIdentifier(), loginRequest.getPassword())
         );
 
         

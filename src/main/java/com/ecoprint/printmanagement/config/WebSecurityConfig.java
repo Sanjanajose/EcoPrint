@@ -38,7 +38,7 @@ public class WebSecurityConfig {
     }
     
     
-    
+   
     
 
     @Bean
@@ -57,6 +57,9 @@ public class WebSecurityConfig {
                         .requestMatchers("/tech/**").hasAuthority(Permission.MANAGE_TECH_TASKS.name())  // Technician access
                         .requestMatchers("/public/**").permitAll()  // Publicly accessible
                         .requestMatchers("/api/metrics/**").hasRole("ADMIN") // Only ADMIN can access these endpoints
+                        .requestMatchers("/api/print-jobs").authenticated()
+                        .requestMatchers("/api/print-jobs/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/favorites/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptionHandling -> exceptionHandling.authenticationEntryPoint(jwtEntryPoint))
@@ -84,6 +87,9 @@ public class WebSecurityConfig {
         authenticationManagerBuilder.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
         return authenticationManagerBuilder.build();
     }
+    
+    
+    
 
 
 }

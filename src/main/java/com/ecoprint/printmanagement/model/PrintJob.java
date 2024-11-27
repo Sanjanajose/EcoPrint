@@ -30,11 +30,24 @@ public class PrintJob {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id") 
     private Long id;
+
  
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
     private User user;  // The user associated with this print job
  
+
+
+    /*@ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
+    private User user;  // The user associated with this print job */
+    
+    
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id", nullable = false) // Ensure the column name is 'user_id'
+    private User user;
+
+
     
     @Enumerated(EnumType.STRING)
     @Column(name = "priority")
@@ -70,6 +83,7 @@ public class PrintJob {
  
     // Queue Management
     @Column
+
     private Integer queuePosition;
  
  
@@ -82,6 +96,15 @@ public class PrintJob {
 	}
 
 	// Print Details
+
+    private int queuePosition;
+    
+    @Column(nullable = false)
+    private boolean favorite = false;
+
+
+    // Print Details
+
     @NotNull(message = "Pages printed is mandatory")
     @Min(value = 1, message = "Pages printed must be at least 1")
     @Column(name="pages_printed", nullable = false)
@@ -140,8 +163,15 @@ public class PrintJob {
     
  
     // Constructors
+
     public PrintJob() {}
  
+
+    public PrintJob() {
+    	this.priority = Priority.HIGH;
+    }
+
+
     // Getters and Setters
  
     public Long getId() { return id; }
@@ -226,6 +256,14 @@ public class PrintJob {
  
     public void setPriority(Priority priority) {
         this.priority = priority;
+    }
+    
+    public boolean isFavorite() {
+        return favorite;
+    }
+
+    public void setFavorite(boolean favorite) {
+        this.favorite = favorite;
     }
 
 	public String getColor() {

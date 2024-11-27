@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,36 +37,44 @@ public class PushNotificationService implements NotificationService {
     }
 
     @Override
-    public void sendPushNotification(String recipientId, String title, String message) {
-        // Fetch the device token of the user
-        Optional<UserDevice> userDeviceOpt = userDeviceRepository.findByUserId(Long.parseLong(recipientId));
-        
-        if (userDeviceOpt.isPresent() && userDeviceOpt.get().getNotificationToken() != null) {
-            String token = userDeviceOpt.get().getNotificationToken();
+    public void sendPushNotification(Long recipientId, String title, String message) {
+        // Fetch the device tokens of the user
+        List<UserDevice> userDevices = userDeviceRepository.findByUserId(recipientId);
 
-            // Build the push notification message
-            Message pushMessage = Message.builder()
-                    .putData("title", title)
-                    .putData("message", message)
-                    .setToken(token)
-                    .build();
+        if (userDevices != null && !userDevices.isEmpty()) {
+            for (UserDevice device : userDevices) {
+                if (device.getNotificationToken() != null) {
+                    String token = device.getNotificationToken();
 
-            try {
-                // Send the push notification via Firebase
-                firebaseMessaging.send(pushMessage);
-                logNotification(token, message, "PUSH");
-            } catch (FirebaseMessagingException e) {
-                e.printStackTrace();
+                    // Build the push notification message
+                    Message pushMessage = Message.builder()
+                            .putData("title", title)
+                            .putData("message", message)
+                            .setToken(token)
+                            .build();
+
+                    try {
+                        // Send the push notification via Firebase
+                        firebaseMessaging.send(pushMessage);
+                        logNotification(token, message, "PUSH");
+                    } catch (FirebaseMessagingException e) {
+                        System.err.println("Error sending push notification to token " + token + ": " + e.getMessage());
+                    }
+                } else {
+                    System.err.println("No valid device token found for one of the devices for userId: " + recipientId);
+                }
             }
         } else {
-            System.err.println("No valid device token found for userId: " + recipientId);
+            System.err.println("No devices found for userId: " + recipientId);
         }
     }
 
     @Override
     public void sendNotificationBasedOnPreferences(UserNotificationPreferences preferences, String title, String message) {
-        if (preferences.isPreferInApp()) {
-            sendPushNotification(preferences.getUser().getId().toString(), title, message);
+        if (preferences.isPreferInApp() && preferences.getUser() != null) {
+            sendPushNotification(preferences.getUser().getId(), title, message); // Pass Long directly
+        } else {
+            System.err.println("Notification preferences are not set for in-app notifications or user is null.");
         }
     }
 

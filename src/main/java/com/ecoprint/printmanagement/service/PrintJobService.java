@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.tika.Tika;
+import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
@@ -98,7 +99,8 @@ public class PrintJobService {
     @Autowired
     private UserNotificationPreferencesService userNotificationPreferencesService;
 
-    
+    @Autowired
+    private AuthService authservice;
     
     @Qualifier("emailNotificationService") // Specify the bean you want to inject
     private NotificationService emailNotificationService;
@@ -377,50 +379,61 @@ this.pushNotificationService = pushNotificationService;
 	public void updateJobStatus(Long jobId, PrintJobStatus status, String comments) {
 	    // Retrieve the job with authorization check (only job owner or admin can access)
 	    PrintJob printJob = findJobIfAuthorized(jobId);
-
+ 
 	    // Determine if the current user is an admin
 	    boolean isAdmin = hasRole("ROLE_ADMIN");
-
+ 
 	    // Restrict status updates for regular users to specific actions
 	    if (!isAdmin && !isStatusAllowedForUser(status)) {
 	        throw new AccessDeniedException("Only admins can change the job status to " + status);
 	    }
-
+ 
 	    // Save the current status as the previous status before updating
 	    PrintJobStatus previousStatus = printJob.getStatus();
-
+ 
 	    // Enforce valid transitions based on the target status
 	    validateStatusTransition(previousStatus, status);
-
+ 
 	    // Update the job's status and corresponding timestamp
 	    updateJobTimestamps(printJob, status);
-
+ 
 	    // Save the updated print job
 	    savePrintJob(printJob);
-
+ 
 	    // Log job action with updated status and user info
 	    logJobAction(jobId, previousStatus, status, getCurrentUserId(), comments,
 	            Optional.ofNullable(printJob.getUser().getUsername()), Optional.empty(),
 	            Optional.empty(), "status_update", Optional.empty(), Optional.empty());
-
+ 
 	    // Send notifications to job owner and admins
 	    sendStatusChangeNotifications(jobId, status, printJob);
 	}
+	
+	
+	private boolean hasRole(String role) {
+	    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+	    if (auth == null) {
+	        throw new IllegalStateException("User is not authenticated.");
+	    }
+	    return auth.getAuthorities().stream()
+	            .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals(role));
+	}
+
 
 	private void validateStatusTransition(PrintJobStatus previousStatus, PrintJobStatus newStatus) {
 	    switch (newStatus) {
 	        case PAUSED:
-	            if (previousStatus != PrintJobStatus.PRINTING && previousStatus != PrintJobStatus.QUEUED) {
+	            if (previousStatus != PrintJobStatus.READY || previousStatus != PrintJobStatus.QUEUED) {
 	                throw new IllegalStateException("Only jobs in PRINTING or QUEUED status can be paused.");
 	            }
 	            break;
 	        case READY:
-	            if (previousStatus != PrintJobStatus.PAUSED && previousStatus != PrintJobStatus.FAILED) {
-	                throw new IllegalStateException("Only paused jobs and faileds jobs can be marked as READY.");
+	            if (previousStatus != PrintJobStatus.PAUSED || previousStatus != PrintJobStatus.FAILED || previousStatus != PrintJobStatus.SUBMITTED ) {
+	                throw new IllegalStateException("Only paused jobs , failed jobs AND Submitted jobs can be marked as READY.");
 	            }
 	            break;
 	        case PRINTING:
-	            if (previousStatus != PrintJobStatus.READY && previousStatus != PrintJobStatus.QUEUED) {
+	            if (previousStatus != PrintJobStatus.READY || previousStatus != PrintJobStatus.QUEUED) {
 	                throw new IllegalStateException("Jobs must be in READY or QUEUED status to start printing.");
 	            }
 	            break;
@@ -461,9 +474,6 @@ this.pushNotificationService = pushNotificationService;
 	        case DELETED:
 	            printJob.setDeletedAt(now);
 	            break;
-	        case FAVORITE:
-	            printJob.setFavoriteAt(now);
-	            break;
 	        default:
 	            // Handle other statuses if necessary
 	            break;
@@ -474,46 +484,61 @@ this.pushNotificationService = pushNotificationService;
 	    String message = "Job ID " + jobId + " status has been updated to " + status;
 
 	    // Notify job owner
-	    String userEmail = printJob.getUser().getEmail();
-	    if (userEmail == null) {
-	        throw new IllegalStateException("Job owner email not found for Job ID: " + jobId);
+	    if (printJob.getUser() == null || printJob.getUser().getId() == null) {
+	        throw new IllegalStateException("Job owner ID not found for Job ID: " + jobId);
 	    }
-	    sendNotification("Job Status Updated", message, userEmail);
+	    Long userId = printJob.getUser().getId();
+	    sendNotification("Job Status Updated", message, userId);
 
 	    // Notify admins
-	    List<String> adminEmails = getAdminEmails();
-	    adminEmails.forEach(adminEmail -> sendNotification("Job Status Updated", message, adminEmail));
+	    List<Long> adminIds = getAdminIds(); // Ensure this method retrieves admin IDs as Long
+	    if (adminIds != null && !adminIds.isEmpty()) {
+	        adminIds.forEach(adminId -> sendNotification("Job Status Updated", message, adminId));
+	    }
 
 	    // Log notifications
-	    logNotification(userEmail, message);
-	    adminEmails.forEach(adminEmail -> logNotification(adminEmail, message));
+	    logNotification(userId.toString(), message);
+	    if (adminIds != null) {
+	        adminIds.forEach(adminId -> logNotification(adminId.toString(), message));
+	    }
+	}
+	
+	
+	private List<Long> getAdminIds() {
+	    return userService.getUsersByRole("ROLE_ADMIN") // Fetch users with the "ROLE_ADMIN" role
+	        .stream()
+	        .map(User::getId) // Replace `User` with your actual user entity class
+	        .collect(Collectors.toList()); // Collect the IDs into a list
 	}
 
 
 
 
-	private void sendNotification(String subject, String message, String recipient) {
-	    // Check recipient type and preferences before sending notifications
+
+	private void sendNotification(String subject, String message, Long recipientId) {
+	    // Retrieve notification preferences for the recipient
 	    UserNotificationPreferences preferences = userNotificationPreferencesService
-	            .findByUserEmail(recipient)
-	            .orElseThrow(() -> new ResourceNotFoundException("User notification preferences not found for: " + recipient));
+	            .findByUserId(recipientId) // Assuming this method finds preferences by userId (Long)
+	            .orElseThrow(() -> new ResourceNotFoundException("User notification preferences not found for user ID: " + recipientId));
 
 	    // Send email notification if the user prefers email
 	    if (preferences.isPreferEmail()) {
-	    	emailNotificationService.sendEmailNotification(recipient, subject, message);
+	        emailNotificationService.sendEmailNotification(preferences.getUser().getEmail(), subject, message);
 	    }
 
 	    // Send push notification if the user prefers in-app notifications
 	    if (preferences.isPreferInApp()) {
-	        String userId = preferences.getUser().getId().toString(); // Fetch the user's ID
-	        pushNotificationService.sendPushNotification(userId, subject, message);
+	        pushNotificationService.sendPushNotification(recipientId, subject, message);
 	    }
 	}
 
 
 	private boolean isStatusAllowedForUser(PrintJobStatus status) {
-		return status == PrintJobStatus.PAUSED || status == PrintJobStatus.FAVORITE;
-	}
+		    return status == PrintJobStatus.FAILED || 
+		           status == PrintJobStatus.DELETED||
+		           status  == PrintJobStatus.PAUSED;
+		}
+
 
 	
 	private List<String> getAdminEmails() {
@@ -522,7 +547,9 @@ this.pushNotificationService = pushNotificationService;
 	        .map(User::getEmail) // Replace `User` with your actual user entity class
 	        .collect(Collectors.toList());
 	}
-
+	
+	
+	
 
 	// This method logs the notification (for auditing purposes)
 	private void logNotification(String recipient, String message) {
@@ -622,31 +649,7 @@ this.pushNotificationService = pushNotificationService;
 		}
 	}
 
-	public void markAsFavorite(Long jobId) {
-		PrintJob job = getJob(jobId);
-
-		// Capture the previous status for logging
-		PrintJobStatus previousStatus = job.getStatus();
-
-		// Update the job status to FAVORITE
-		updateJobStatus(jobId, PrintJobStatus.FAVORITE, "Job marked as favorite by user");
-
-		// Log the action with previous and new status details
-		Long currentUserId = getCurrentUserId();
-		logJobAction(jobId, // Job ID
-				previousStatus, // Previous status (before update)
-				PrintJobStatus.PAUSED, // Updated status (PAUSED in this case)
-				currentUserId, // User ID performing the action
-				"Job paused by user", // Action description
-				Optional.ofNullable(job.getUserName()), // User's username (wrapped in Optional)
-				Optional.empty(), // No previous position (if not needed, use Optional.empty())
-				Optional.empty(), // No new position (if not needed, use Optional.empty())
-				"pause", // Action type (this can be "pause" for the pausing action)
-				Optional.empty(), // No file name involved
-				Optional.empty() // No file size involved
-		);
-	}
-
+	
 	public void resumeJob(Long jobId) {
 		// Retrieve the job with authorization check (owner or admin only)
 		PrintJob job = findJobIfAuthorized(jobId);
@@ -798,7 +801,7 @@ this.pushNotificationService = pushNotificationService;
 		return jobs;
 	}
 
-	public PrintJob findJobIfAuthorized(Long jobId) {
+	/*public PrintJob findJobIfAuthorized(Long jobId) {
 		PrintJob job = printJobRepository.findById(jobId)
 				.orElseThrow(() -> new ResourceNotFoundException("Job not found"));
 
@@ -812,9 +815,34 @@ this.pushNotificationService = pushNotificationService;
 		}
 
 		throw new AccessDeniedException("User is not authorized to manage this job");
+	}*/
+	
+	
+	public PrintJob findJobIfAuthorized(Long jobId) {
+	    logger.info("Fetching print job with ID: {}", jobId);
+
+	    // Attempt to fetch the job
+	    PrintJob job = printJobRepository.findById(jobId)
+	            .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
+
+	    logger.info("Retrieved job: {}", job);
+
+	    Long currentUserId = getCurrentUserId();
+	    boolean isAdmin = hasRole("ROLE_ADMIN");
+
+	    if (isAdmin || (job.getUser() != null && job.getUser().getId().equals(currentUserId))) {
+	        logger.info("Authorized access for job ID: {}", jobId);
+	        return job;
+	    }
+
+	    logger.error("Unauthorized access to job ID: {}", jobId);
+	    throw new AccessDeniedException("User is not authorized to manage this job");
 	}
 
-	private Long getCurrentUserId() {
+
+
+
+	/*private Long getCurrentUserId() {
 		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 		if (auth == null) {
 			logger.error("User is not authenticated.");
@@ -836,7 +864,25 @@ this.pushNotificationService = pushNotificationService;
 		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 		return auth.getAuthorities().stream()
 				.anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals(role));
+	}*/
+	
+	private Long getCurrentUserId() {
+	    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+	    if (auth == null) {
+	        logger.error("No authentication context available.");
+	        throw new IllegalStateException("User is not authenticated.");
+	    }
+
+	    if (!(auth.getPrincipal() instanceof CustomUserDetails)) {
+	        logger.error("Invalid principal type: {}", auth.getPrincipal());
+	        throw new IllegalStateException("Invalid principal type.");
+	    }
+
+	    CustomUserDetails userDetails = (CustomUserDetails) auth.getPrincipal();
+	    logger.info("Authenticated user ID: {}", userDetails.getId());
+	    return userDetails.getId();
 	}
+
 
 	@Transactional
 	public void addJob(PrintJobRequest jobRequest) {
@@ -912,6 +958,10 @@ job.setUploadTimestamp(LocalDateTime.now());
 
 	public void logQueuePositionChange(Long jobId, int previousPosition, int newPosition, Long userId,
 			String actionDescription) {
+		
+		PrintJob job = printJobRepository.findById(jobId)
+		        .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "jobId", jobId));
+
 		JobHistory history = new JobHistory();
 		history.setPrintJobId(jobId);
 		history.setPreviousPosition(previousPosition); // Add this field in JobHistory if needed
@@ -919,7 +969,7 @@ job.setUploadTimestamp(LocalDateTime.now());
 		history.setUserId(userId);
 		history.setComments(actionDescription);
 		history.setTimestamp(LocalDateTime.now());
-		history.setUpdatedStatus(PrintJobStatus.UNKNOWN); // Replace SOME_DEFAULT_STATUS with an appropriate enum value
+		history.setUpdatedStatus(job.getStatus()); // Replace SOME_DEFAULT_STATUS with an appropriate enum value
 		history.setActionType("Position Updated");
 		jobHistoryRepository.save(history);
 	}
@@ -1042,6 +1092,24 @@ job.setUploadTimestamp(LocalDateTime.now());
 				.orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
 	}
 
+	
+    
+
+    // Regular User: Get jobs for the user
+    public List<PrintJobDTO> getJobsForUser(Long userId) {
+        List<PrintJob> jobs = printJobRepository.findByUserIdOrderByStatusAscPriorityAsc(userId);
+        return jobs.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    // Convert entity to DTO
+    private PrintJobDTO convertToDTO(PrintJob job) {
+        PrintJobDTO dto = new PrintJobDTO();
+        BeanUtils.copyProperties(job, dto);
+        return dto;
+    }
+
+
+
 	// Logic to find the last queue position
 	public int assignNextQueuePosition() {
 		// Find the maximum queue position and add 1 to get the next position
@@ -1067,6 +1135,15 @@ job.setUploadTimestamp(LocalDateTime.now());
 
 		return printJobList;
 	}
+	
+	/**
+     * Check if the authenticated user has access to a specific job
+     */
+    public boolean hasAccess(Long jobId, User authenticatedUser) {
+        PrintJob job = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
+        return authenticatedUser.getRoles().contains("ROLE_ADMIN") || job.getUser().getId().equals(authenticatedUser.getId());
+    }
 
 	public List<PrintJobDTO> getPrintJobsByStatus(PrintJobStatus queued) {
 		List<PrintJob> queuedJobs = printJobRepository.findByStatusOrderByPriorityAsc(PrintJobStatus.QUEUED);
@@ -1205,6 +1282,75 @@ job.setUploadTimestamp(LocalDateTime.now());
 		    return false; // Job not found or not eligible for retry
 		}
 
+
 	
 */
 }
+
+	public void markAsFavorite(Long jobId, String username) {
+	    PrintJob job = printJobRepository.findById(jobId)
+	        .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "jobId", jobId));
+
+	    // Validate ownership or admin role
+	    if (!job.getUser().getEmail().equals(username) && !isAdmin()) {
+	        throw new AccessDeniedException("You are not authorized to mark this job as favorite.");
+	    }
+
+	    if (job.isFavorite()) {
+	        logger.info("Job {} is already marked as favorite by user {}", jobId, username);
+	        return;
+	    }
+
+	    job.setFavorite(true);
+	    printJobRepository.save(job);
+
+	    logger.info("Job {} marked as favorite by user {}", jobId, username);
+	}
+
+
+	private boolean isAdmin() {
+	    return SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+	        .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+	}
+
+	
+	public void removeFromFavorite(Long jobId, String userId) {
+	    PrintJob job = printJobRepository.findById(jobId)
+	        .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "jobId", jobId));
+
+	    if (!job.getUser().getId().toString().equals(userId)) {
+	    	throw new AccessDeniedException("You are not authorized to mark this job as favorite.");
+
+	    }
+
+	    job.setFavorite(false);
+	    printJobRepository.save(job);
+	}
+
+	
+	public Boolean isOwner(Long jobId, String username) {
+		Long isValid = printJobRepository.existsByIdAndUser_Username(jobId, username);
+		if (isValid == 1) {
+			return true;
+		}
+	    return false;
+	}
+
+	
+	@Transactional
+	public List<PrintJob> getAllFavoriteJobs() {
+	    List<PrintJob> jobs = printJobRepository.findAllFavoritesWithUsers();
+	    jobs.forEach(job -> Hibernate.initialize(job.getUser()));
+	    return jobs;
+	}
+
+	@Transactional
+	public List<PrintJob> getFavoriteJobs(String userId) {
+	    List<PrintJob> jobs = printJobRepository.findFavoritesByUser(Long.valueOf(userId));
+	    jobs.forEach(job -> Hibernate.initialize(job.getUser()));
+	    return jobs;
+	}
+
+
+}
+
