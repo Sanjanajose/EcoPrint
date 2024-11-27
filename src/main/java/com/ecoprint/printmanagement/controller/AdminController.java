@@ -38,9 +38,11 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.validation.Valid;
 import jakarta.mail.MessagingException;
 import io.jsonwebtoken.io.IOException;
+import io.swagger.v3.oas.annotations.Operation;
+
 
 @RestController
-@RequestMapping("/admin")
+@RequestMapping("/api/admin")
 @PreAuthorize("hasRole('ADMIN') or hasRole('SUPERADMIN')")
 public class AdminController {
 
@@ -55,12 +57,14 @@ public class AdminController {
         this.applicationEventPublisher = applicationEventPublisher;
     }
 
-    @GetMapping("/users")
-    public ResponseEntity<?> getAllUsers(
-            @RequestParam(defaultValue = "0") int pageNumber,
-            @RequestParam(defaultValue = "10") int pageSize) {
-        Page<User> users = adminService.getAllUsers(pageNumber, pageSize);
-        return ResponseEntity.ok(users);
+    @GetMapping
+    @Operation(summary = "Fetch a paginated list of all users.")
+    public ResponseEntity<Page<User>> getAllUsers(
+            @RequestParam(defaultValue = "0") int page,  // Page number (default: 0)
+            @RequestParam(defaultValue = "10") int size // Page size (default: 10)
+    ) {
+        Page<User> users = adminService.getAllUsers(page, size);
+        return ResponseEntity.ok(users); // Return paginated user data
     }
 
     @PostMapping("/users")

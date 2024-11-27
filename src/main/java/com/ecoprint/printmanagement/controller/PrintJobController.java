@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -20,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,9 +41,15 @@ import com.ecoprint.printmanagement.model.PrintJobDTO;
 import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.Priority;
+import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+
+import com.ecoprint.printmanagement.response.ReadyJobResponse;
+
+import com.ecoprint.printmanagement.service.AuthService;
+
 import com.ecoprint.printmanagement.service.NotificationService;
 import com.ecoprint.printmanagement.service.PrintJobService;
 
@@ -77,6 +85,11 @@ public class PrintJobController {
 
     @Autowired
     private UserRepository userRepository;
+    
+    
+    @Autowired
+    private AuthService authService; // For getting the authenticated user
+
 
     
 
@@ -101,8 +114,8 @@ public class PrintJobController {
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted) {
         try {
-            double cost = pagesPrinted * COST_PER_PAGE;
-            printJobService.uploadFile(file, userName, description, pagesPrinted, cost);
+           
+            printJobService.uploadFile(file, userName, description, pagesPrinted);
             return ResponseEntity.status(HttpStatus.CREATED).body("File uploaded successfully and job submitted");
         } catch (IOException e) {
             logger.error("IOException during file upload", e);
@@ -135,7 +148,7 @@ public class PrintJobController {
         }
     }
 
-    @PutMapping("/{jobId}/status")
+  /*  @PutMapping("/{jobId}/status")
     @Operation(summary = "Update print job status", description = "Allows authorized users to update the status of a print job.")
     public ResponseEntity<String> updateJobStatus(
             @PathVariable Long jobId,
@@ -152,7 +165,30 @@ public class PrintJobController {
 
         // Return success response if everything was processed correctly
         return ResponseEntity.ok("Print job status updated to " + status);
+    } */
+    
+    @PutMapping("/{jobId}/status")
+    public ResponseEntity<String> updateJobStatus(@PathVariable Long jobId,
+                                                  @RequestParam("status") PrintJobStatus status) {
+        logger.info("Received request to update status for job ID: {}, New Status: {}", jobId, status);
+
+        try {
+            printJobService.updateJobStatus(jobId, status, "Status updated to " + status.name());
+            logger.info("Job status updated successfully for ID: {}", jobId);
+        } catch (ResourceNotFoundException e) {
+            logger.error("Resource not found for job ID: {}", jobId, e);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Print job not found");
+        } catch (Exception e) {
+            logger.error("Unexpected error while updating job status for ID: {}", jobId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while updating job status.");
+        }
+
+        return ResponseEntity.ok("Print job status updated to " + status);
     }
+
+    
+    
+
     
     @DeleteMapping("/{jobId}")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
@@ -188,23 +224,46 @@ public class PrintJobController {
         }
     }
 
-    @PutMapping("/{jobId}/favorite")
-    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
-    @Operation(summary = "Favorite print job", description = "Allows a user or admin to mark a print job as favorite.")
-    public ResponseEntity<String> favoriteJob(@PathVariable Long jobId) {
-        return updateJobStatus(jobId, PrintJobStatus.FAVORITE);
-    }
     
     
 
     
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
-    @Operation(summary = "allows ADMIN to get the list of all the jobs ")
-    @GetMapping("/admin")
+    //@PreAuthorize("hasRole('ROLE_ADMIN')")
+    //@Operation(summary = "allows ADMIN to get the list of all the jobs ")
+    //@GetMapping("/admin")
+    //public ResponseEntity<List<PrintJobDTO>> getAllJobs() {
+    //	List<PrintJobDTO> jobs = printJobService.getAllJobs();
+      //  return ResponseEntity.ok(jobs);
+    //}
+    
+   
+
+    @GetMapping
+    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_USER')")
+    @Operation(summary = "Allows ADMIN to view all jobs and regular users to view their own jobs")
     public ResponseEntity<List<PrintJobDTO>> getAllJobs() {
-    	List<PrintJobDTO> jobs = printJobService.getAllJobs();
+        User currentUser = authService.getAuthenticatedUser(); // Fetch the logged-in user
+        List<PrintJobDTO> jobs;
+
+        if (currentUser.getRoles().contains("ROLE_ADMIN")) {
+            // Admin gets all jobs
+            jobs = printJobService.getAllJobs();
+        } else {
+            // Regular user gets their own jobs
+            jobs = printJobService.getJobsForUser(currentUser.getId());
+        }
+
         return ResponseEntity.ok(jobs);
     }
+    /*@GetMapping
+    public List<PrintJob> getAllJobs() {
+        User currentUser = authService.getAuthenticatedUser();
+        if (currentUser.getRoles().contains("ROLE_ADMIN")) {
+            return printJobService.getAllJobs();
+        } else {
+            return printJobService.getJobsForUser(currentUser.getId());
+        }
+    }*/
     
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/admin/{jobId}")
@@ -225,7 +284,7 @@ public class PrintJobController {
     }
     
     @PutMapping("/set-priority/{jobId}")
-    @PreAuthorize("hasRole('ROLE_ADMIN') or @userService.isOwner(#jobId)")
+    @PreAuthorize("hasRole('ROLE_ADMIN') or @printJobService.isOwner(#jobId, authentication.name)")
     @Operation(summary = "allows to set the priority of the print jobs ", description = "allows job owner or admin to set the priority of print job")
     public ResponseEntity<String> setJobPriority(@PathVariable Long jobId, @org.springframework.web.bind.annotation.RequestBody Priority priority) {
         if (priority == null) {
@@ -364,7 +423,76 @@ public class PrintJobController {
         return ResponseEntity.ok("Print job reordered");
     }
 
+
+   
+    @GetMapping("/ready-jobs")
+    @Operation(summary = "Get Ready Jobs",
+               description = "Retrieve a list of jobs that are ready to print with estimated wait times.")
+    public ResponseEntity<List<ReadyJobResponse>> getReadyJobs() {
+        List<ReadyJobResponse> readyJobs = printJobService.getReadyJobs();
+        return ResponseEntity.ok(readyJobs);
+    }
+
+ /*
+
+    @PostMapping("/retry-failed-jobs/{jobId}")
+
+    public ResponseEntity<String> retryFailedJobById(@PathVariable Long jobId) {
+
+    	boolean retrySuccess = printJobService.retryFailedJobById(jobId);
+
+    
+
+    @PutMapping("/{jobId}/favorite")
+    @PreAuthorize("hasRole('ADMIN') or @printJobService.isOwner(#jobId, authentication.name)")
+    public ResponseEntity<?> markAsFavorite(@PathVariable Long jobId) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        printJobService.markAsFavorite(jobId, username);
+        return ResponseEntity.ok("Job marked as favorite.");
+    }
+  
+    @PutMapping("/{jobId}/unfavorite")
+    @PreAuthorize("hasRole('ADMIN') or @printJobService.isOwner(#jobId, authentication.name)")
+    public ResponseEntity<?> removeFromFavorite(@PathVariable Long jobId) {
+        String userId = getCurrentUserId();
+        printJobService.removeFromFavorite(jobId, userId);
+        return ResponseEntity.ok("Job removed from favorite.");
+    }
+    @GetMapping("/favorites")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER')")
+    public ResponseEntity<List<PrintJob>> getFavoriteJobs() {
+        String userId = getCurrentUserId(); // Utility to fetch logged-in user ID
+        List<PrintJob> favorites = hasRoleAdmin()
+                ? printJobService.getAllFavoriteJobs()  // Admin sees all
+                : printJobService.getFavoriteJobs(userId); // User sees their own
+        return ResponseEntity.ok(favorites);
+    }
+
+    // Helper method for checking admin role
+    private boolean hasRoleAdmin() {
+        return SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+                .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+    
+    private String getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication.getName(); // Assumes username is the user ID or can be mapped to it
+    }
+
+
+
+    if (retrySuccess) {
+
+        return ResponseEntity.ok("Retry process triggered for job ID: " + jobId);
+
+    } else {
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job ID " + jobId + " not found or not eligible for retry.");
+
+    }
+
+    }
   
 
-
+*/
 }

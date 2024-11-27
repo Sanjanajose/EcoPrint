@@ -2,7 +2,7 @@ package com.ecoprint.printmanagement.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -15,12 +15,18 @@ import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.repository.ActivityLogRepository;
+import com.ecoprint.printmanagement.repository.EmailVerificationTokenRepository;
+import com.ecoprint.printmanagement.repository.PasswordResetTokenRepository;
+import com.ecoprint.printmanagement.repository.UserNotificationPreferencesRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.service.RoleService;
+
+import jakarta.transaction.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
 import com.ecoprint.printmanagement.model.payload.RoleAssignmentRequest;
+import org.springframework.data.domain.Pageable;
 
 
 @Service
@@ -36,13 +42,25 @@ public class AdminService {
     private RoleService roleService;
     
     @Autowired
+    private EmailVerificationTokenRepository emailVerificationTokenRepository;
+    
+    
+
+    @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
+    
+    @Autowired
+    private UserNotificationPreferencesRepository userNotificationPreferencesRepository;
+    
+    @Autowired
     private ActivityLogRepository activityLogRepository; 
 
-    // Retrieve a paginated list of all users.
-    public Page<User> getAllUsers(int pageNumber, int pageSize) {
-        Pageable pageable = PageRequest.of(pageNumber, pageSize);
-        return userRepository.findAll(pageable);
+    public Page<User> getAllUsers(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return userRepository.findAllWithBackupCodes(pageable);
     }
+
+
     
  // Create a new user based on the provided registration request.
     public User createUser(RegistrationRequest request, Set<String> roleNames) {
@@ -92,14 +110,26 @@ public class AdminService {
         return userRepository.save(user);
     }
     
+    @Transactional
     public void deleteUser(Long userId) {
+        // Fetch the user or throw an exception if not found
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        
+        // Clean up related entities to prevent foreign key constraint violations
+        emailVerificationTokenRepository.deleteByUserId(userId);
+        passwordResetTokenRepository.deleteByUserId(userId);
+        userNotificationPreferencesRepository.deleteByUserId(userId);
+        // Add other dependent entities if needed
+
+        // Now delete the user
         userRepository.delete(user);
     }
-    
+
     public List<ActivityLog> getActivityLogs(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         return activityLogRepository.findAll(pageable).getContent();
     }
+    
+    
 }

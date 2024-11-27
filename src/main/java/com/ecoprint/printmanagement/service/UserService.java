@@ -13,6 +13,7 @@
  */
 package com.ecoprint.printmanagement.service;
 
+import java.awt.print.Pageable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +33,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -54,9 +56,12 @@ import com.ecoprint.printmanagement.model.payload.RegistrationRequest;
 import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.UserDeviceRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+import org.springframework.data.domain.Page;
+
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.transaction.Transactional;
 import net.coobird.thumbnailator.Thumbnails;
 
 @Service
@@ -197,33 +202,38 @@ public class UserService {
 		}
 	}
 
+	
+	@Transactional
 	public User deleteUserRole(Long userId, String roleName, Authentication authentication) {
-		User user = userRepository.findById(userId)
-				.orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+	    User user = userRepository.findById(userId)
+	            .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-		Role role = roleService.findByName(roleName)
-				.orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
+	    Role role = roleService.findByName(roleName)
+	            .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
 
-		if (!currentUserHasPermissionToAssign(authentication, roleName)) {
-			throw new AccessDeniedException("You don't have permission to remove this role.");
-		}
+	    if (!currentUserHasPermissionToAssign(authentication, roleName)) {
+	        throw new AccessDeniedException("You don't have permission to remove this role.");
+	    }
 
-		// Remove the role and save
-		user.getRoles().remove(role);
-		userRepository.save(user);
+	    // Remove the role
+	    user.getRoles().remove(role);
 
-		// Log role change activity
-		activityLogService.logRoleChange(userId, roleName, "Role removed");
+	    // Save and flush changes
+	    userRepository.saveAndFlush(user);
 
-		// Update permissions
-		// Update permissions with null check on RolePermissionMapping
-		Set<Permission> updatedPermissions = user.getRoles().stream().flatMap(r -> {
-			Set<Permission> permissions = RolePermissionMapping.rolePermissions.get(r.getRole());
-			return permissions != null ? permissions.stream() : Stream.empty();
-		}).collect(Collectors.toSet());
+	    // Clear the persistence context
+	    entityManager.clear();
 
-		return userRepository.save(user);
+	    // Log role change activity
+	    activityLogService.logRoleChange(userId, roleName, "Role removed");
+
+	    return user;
 	}
+	
+	
+	
+
+
 
 	private Set<Role> getRolesForNewUser(Boolean isAdmin) {
 		Set<Role> roles = new HashSet<>();
@@ -484,16 +494,57 @@ public class UserService {
 						// PrintJobService.
 	}
 
-	public List<User> getUsersByRole(String roleName) {
+	/*public List<User> getUsersByRole(String roleName) {
 		Role adminRole = roleRepository.findByName(roleName)
 				.orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
 		return userRepository.findByRolesContaining(adminRole);
-	}
+	}*/
+	
+	public List<User> getUsersByRole(String roleName) {
+        // Convert role name to RoleName enum
+        RoleName roleNameEnum;
+        try {
+            roleNameEnum = RoleName.valueOf(roleName.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid role name: " + roleName, ex);
+        }
+ 
+        // Fetch the Role entity
+        Role role = roleRepository.findByRole(roleNameEnum)
+                .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleNameEnum));
+ 
+        // Fetch users associated with the role
+        return userRepository.findByRolesContaining(role);
+    }
+ 
+
+
+	public Long findUserIdByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(User::getId)
+                .orElse(null); // Return null if user not found
+    }
+	
 	
 	public String getDeviceTokenByUserId(long userId) {
 	    return userDeviceRepository.findDeviceTokenByUserId(userId)
 	            .orElseThrow(() -> new ResourceNotFoundException("Device token not found for userId: " + userId));
 	}
+	
+	public User getCurrentUser() {
+	    String username = SecurityContextHolder.getContext().getAuthentication().getName();
+	    return userRepository.findByUsername(username)
+	            .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
+	}
+
+
+	
+	public User getUserByEmail(String email) {
+	    return userRepository.findByEmail(email)
+	            .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+	}
+
+	
 
 
 }

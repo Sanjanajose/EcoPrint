@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.service;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -10,12 +11,19 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.tika.Tika;
+import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.beans.factory.annotation.Qualifier;
+
 import org.springframework.context.annotation.Lazy;
+
+
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -24,11 +32,18 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ecoprint.printmanagement.exception.NetworkException;
+import com.ecoprint.printmanagement.exception.PrinterException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+
 import com.ecoprint.printmanagement.model.FailedJob;
+
+import com.ecoprint.printmanagement.model.FailureReason;
+
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.NotificationLog;
 import com.ecoprint.printmanagement.model.PrintHistoryDTO;
@@ -41,6 +56,7 @@ import com.ecoprint.printmanagement.model.Printer;
 import com.ecoprint.printmanagement.model.Priority;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
+import com.ecoprint.printmanagement.model.SubmittedJobs;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserNotificationPreferences;
 import com.ecoprint.printmanagement.repository.FailedJobRepository;
@@ -49,10 +65,25 @@ import com.ecoprint.printmanagement.repository.NotificationLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.PrinterRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
+import com.ecoprint.printmanagement.repository.SubmitJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+import com.ecoprint.printmanagement.response.ReadyJobResponse;
+import com.google.api.client.util.Objects;
 
 @Service
 public class PrintJobService {
+
+    @Value("${retry.maxRetryCount:3}")
+    private int maxRetryCount;
+
+    @Value("${retry.interval.network:PT1M}") // Default 1 minute for network issues
+    private String retryNetworkInterval;
+
+    @Value("${retry.interval.printer:PT5M}") // Default 5 minutes for printer issues
+    private String retryPrinterInterval;
+
+    @Value("${retry.interval.default:PT2M}") // Default interval for other cases
+    private String defaultRetryInterval;
 
 	private static final Logger logger = LoggerFactory.getLogger(PrintJobService.class);
 	private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -61,6 +92,8 @@ public class PrintJobService {
 	private final JobHistoryRepository jobHistoryRepository;
 
 	private final UserRepository userrepository;
+
+    private final SubmitJobRepository submitJobRepository;
 
 	@Autowired
 	private NotificationLogRepository notificationLogRepository;
@@ -74,6 +107,7 @@ public class PrintJobService {
 	
     @Autowired
     private UserNotificationPreferencesService userNotificationPreferencesService;
+
     
     @Autowired
 	private PrinterRepository printerRepository;
@@ -81,6 +115,11 @@ public class PrintJobService {
 
     @Autowired
     private FailedJobRepository failedJobRepository;
+
+
+    @Autowired
+    private AuthService authservice;
+
     
     @Qualifier("emailNotificationService") // Specify the bean you want to inject
     private NotificationService emailNotificationService;
@@ -104,19 +143,24 @@ public class PrintJobService {
 
 	private final Tika tika = new Tika();
 
-	public PrintJobService(PrintJobRepository printJobRepository, JobHistoryRepository jobHistoryRepository,
-			UserRepository userrepository, SimpMessagingTemplate messagingTemplate, @Qualifier("emailNotificationService") NotificationService emailNotificationService,  @Qualifier("pushNotificationService") NotificationService pushNotificationService) {
-		this.printJobRepository = printJobRepository;
-		this.jobHistoryRepository = jobHistoryRepository;
-		this.userrepository = userrepository;
-		this.messagingTemplate = messagingTemplate;
-		this.emailNotificationService = emailNotificationService;
-		this.pushNotificationService = pushNotificationService;
-
-	}
+	public PrintJobService(PrintJobRepository printJobRepository, 
+            JobHistoryRepository jobHistoryRepository,
+            UserRepository userrepository, 
+            SubmitJobRepository submitJobRepository,
+            SimpMessagingTemplate messagingTemplate, 
+            @Qualifier("emailNotificationService") NotificationService emailNotificationService,  
+            @Qualifier("pushNotificationService") NotificationService pushNotificationService) {
+this.printJobRepository = printJobRepository;
+this.jobHistoryRepository = jobHistoryRepository;
+this.userrepository = userrepository;
+this.submitJobRepository = submitJobRepository;
+this.messagingTemplate = messagingTemplate;
+this.emailNotificationService = emailNotificationService;
+this.pushNotificationService = pushNotificationService;
+}
 
 	// Method to upload file and create a new job
-	@Transactional
+	//@Transactional
 	// Method to upload file and create a new job
 	/**
 	 * public void uploadFile(MultipartFile file, String userName, String
@@ -152,27 +196,46 @@ public class PrintJobService {
 	 **/
 
 	// Method to upload file and create a new job
-	public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost)
-			throws IOException {
-		if (file == null || file.isEmpty()) {
-			throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
-		}
-		if (file.getSize() > MAX_FILE_SIZE) {
-			throw new IllegalArgumentException(
-					"File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
-		}
+    @Transactional
+    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
+        }
 
-		String fileType = tika.detect(file.getInputStream());
-		validateFileType(fileType);
+        String fileType = tika.detect(file.getInputStream());
+        validateFileType(fileType);
 
-		// Retrieve the User entity based on userName
-		User user = userrepository.findByUsername(userName)
-				.orElseThrow(() -> new ResourceNotFoundException("User", "username", userName));
+        // Retrieve the User entity based on userName
+        User user = userrepository.findByUsername(userName)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", userName));
 
-		byte[] fileData = file.getBytes();
+        if (!userrepository.existsById(user.getId())) {
+            throw new IllegalArgumentException("User does not exist");
+        }
+        
 
-		String fileName = file.getOriginalFilename(); // Extract file name
 
+        byte[] fileData = file.getBytes();
+        
+        String fileName = file.getOriginalFilename(); // Extract file name        
+        SubmittedJobs submittedJob  = new SubmittedJobs();
+        submittedJob.setFileName(file.getOriginalFilename());
+        submittedJob.setFileType(fileType);
+        submittedJob.setFileSize(file.getSize());
+        submittedJob.setUser(user); // Set the User entity
+        submittedJob.setUserName(user.getUsername()); // Populate the userName field
+        submittedJob.setUploadTimestamp(LocalDateTime.now());
+        submittedJob.setFileData(fileData);
+        submittedJob.setDescription(description);
+        submittedJob.setStatus(PrintJobStatus.SUBMITTED);
+        submittedJob.setPagesPrinted(pagesPrinted);
+        Assert.notNull(submittedJob.getFileName(), "File name must not be null");
+        Assert.notNull(submittedJob.getStatus(), "Job status must not be null");
+        submitJobRepository.save(submittedJob);
+        Long currentUserId = getCurrentUserId();
 		PrintJob printJob = new PrintJob();
 		printJob.setFileName(fileName); // Set file name
 		printJob.setFileType(fileType); // Set file type
@@ -183,14 +246,10 @@ public class PrintJobService {
 		printJob.setFileData(fileData); // Set the file data
 		printJob.setDescription(description); // Set description
 		printJob.setPagesPrinted(pagesPrinted); // Set pages printed
-		printJob.setCost(cost); // Set cost
+		//printJob.setCost(cost); // Set cost
 		printJob.setStatus(PrintJobStatus.SUBMITTED); // Set job status as SUBMITTED
 		printJob.setSubmittedAt(LocalDateTime.now()); // Set submission timestamp
 		printJobRepository.save(printJob);
-
-		// Retrieve current user ID for logging
-		Long currentUserId = getCurrentUserId();
-
 		// Log job submission
 
 		// Step 8: Log the job submission action
@@ -207,7 +266,8 @@ public class PrintJobService {
 				Optional.of(file.getSize()) // File size (passed as Optional)
 		);
 
-	}
+
+    }
 
 	// Method to validate file type
 	private void validateFileType(String fileType) {
@@ -343,50 +403,61 @@ public class PrintJobService {
 	public void updateJobStatus(Long jobId, PrintJobStatus status, String comments) {
 	    // Retrieve the job with authorization check (only job owner or admin can access)
 	    PrintJob printJob = findJobIfAuthorized(jobId);
-
+ 
 	    // Determine if the current user is an admin
 	    boolean isAdmin = hasRole("ROLE_ADMIN");
-
+ 
 	    // Restrict status updates for regular users to specific actions
 	    if (!isAdmin && !isStatusAllowedForUser(status)) {
 	        throw new AccessDeniedException("Only admins can change the job status to " + status);
 	    }
-
+ 
 	    // Save the current status as the previous status before updating
 	    PrintJobStatus previousStatus = printJob.getStatus();
-
+ 
 	    // Enforce valid transitions based on the target status
 	    validateStatusTransition(previousStatus, status);
-
+ 
 	    // Update the job's status and corresponding timestamp
 	    updateJobTimestamps(printJob, status);
-
+ 
 	    // Save the updated print job
 	    savePrintJob(printJob);
-
+ 
 	    // Log job action with updated status and user info
 	    logJobAction(jobId, previousStatus, status, getCurrentUserId(), comments,
 	            Optional.ofNullable(printJob.getUser().getUsername()), Optional.empty(),
 	            Optional.empty(), "status_update", Optional.empty(), Optional.empty());
-
+ 
 	    // Send notifications to job owner and admins
 	    sendStatusChangeNotifications(jobId, status, printJob);
 	}
+	
+	
+	private boolean hasRole(String role) {
+	    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+	    if (auth == null) {
+	        throw new IllegalStateException("User is not authenticated.");
+	    }
+	    return auth.getAuthorities().stream()
+	            .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals(role));
+	}
+
 
 	private void validateStatusTransition(PrintJobStatus previousStatus, PrintJobStatus newStatus) {
 	    switch (newStatus) {
 	        case PAUSED:
-	            if (previousStatus != PrintJobStatus.PRINTING && previousStatus != PrintJobStatus.QUEUED) {
+	            if (previousStatus != PrintJobStatus.READY || previousStatus != PrintJobStatus.QUEUED) {
 	                throw new IllegalStateException("Only jobs in PRINTING or QUEUED status can be paused.");
 	            }
 	            break;
 	        case READY:
-	            if (previousStatus != PrintJobStatus.PAUSED && previousStatus != PrintJobStatus.FAILED) {
-	                throw new IllegalStateException("Only paused jobs and faileds jobs can be marked as READY.");
+	            if (previousStatus != PrintJobStatus.PAUSED || previousStatus != PrintJobStatus.FAILED || previousStatus != PrintJobStatus.SUBMITTED ) {
+	                throw new IllegalStateException("Only paused jobs , failed jobs AND Submitted jobs can be marked as READY.");
 	            }
 	            break;
 	        case PRINTING:
-	            if (previousStatus != PrintJobStatus.READY && previousStatus != PrintJobStatus.QUEUED) {
+	            if (previousStatus != PrintJobStatus.READY || previousStatus != PrintJobStatus.QUEUED) {
 	                throw new IllegalStateException("Jobs must be in READY or QUEUED status to start printing.");
 	            }
 	            break;
@@ -427,9 +498,6 @@ public class PrintJobService {
 	        case DELETED:
 	            printJob.setDeletedAt(now);
 	            break;
-	        case FAVORITE:
-	            printJob.setFavoriteAt(now);
-	            break;
 	        default:
 	            // Handle other statuses if necessary
 	            break;
@@ -440,46 +508,62 @@ public class PrintJobService {
 	    String message = "Job ID " + jobId + " status has been updated to " + status;
 
 	    // Notify job owner
-	    String userEmail = printJob.getUser().getEmail();
-	    if (userEmail == null) {
-	        throw new IllegalStateException("Job owner email not found for Job ID: " + jobId);
+	    if (printJob.getUser() == null || printJob.getUser().getId() == null) {
+	        throw new IllegalStateException("Job owner ID not found for Job ID: " + jobId);
 	    }
-	    sendNotification("Job Status Updated", message, userEmail);
+	    Long userId = printJob.getUser().getId();
+	    sendNotification("Job Status Updated", message, userId);
 
 	    // Notify admins
-	    List<String> adminEmails = getAdminEmails();
-	    adminEmails.forEach(adminEmail -> sendNotification("Job Status Updated", message, adminEmail));
+	    List<Long> adminIds = getAdminIds(); // Ensure this method retrieves admin IDs as Long
+	    if (adminIds != null && !adminIds.isEmpty()) {
+	        adminIds.forEach(adminId -> sendNotification("Job Status Updated", message, adminId));
+	    }
 
 	    // Log notifications
-	    logNotification(userEmail, message);
-	    adminEmails.forEach(adminEmail -> logNotification(adminEmail, message));
+	    logNotification(userId.toString(), message);
+	    if (adminIds != null) {
+	        adminIds.forEach(adminId -> logNotification(adminId.toString(), message));
+	    }
+	}
+	
+	
+	private List<Long> getAdminIds() {
+	    return userService.getUsersByRole("ROLE_ADMIN") // Fetch users with the "ROLE_ADMIN" role
+	        .stream()
+	        .map(User::getId) // Replace `User` with your actual user entity class
+	        .collect(Collectors.toList()); // Collect the IDs into a list
 	}
 
 
 
 
-	private void sendNotification(String subject, String message, String recipient) {
-	    // Check recipient type and preferences before sending notifications
+
+	private void sendNotification(String subject, String message, Long recipientId) {
+	    // Retrieve notification preferences for the recipient
 	    UserNotificationPreferences preferences = userNotificationPreferencesService
-	            .findByUserEmail(recipient)
-	            .orElseThrow(() -> new ResourceNotFoundException("User notification preferences not found for: " + recipient));
+	            .findByUserId(recipientId) // Assuming this method finds preferences by userId (Long)
+	            .orElseThrow(() -> new ResourceNotFoundException("User notification preferences not found for user ID: " + recipientId));
 
 	    // Send email notification if the user prefers email
 	    if (preferences.isPreferEmail()) {
-	    	emailNotificationService.sendEmailNotification(recipient, subject, message);
+	        emailNotificationService.sendEmailNotification(preferences.getUser().getEmail(), subject, message);
 	    }
 
 	    // Send push notification if the user prefers in-app notifications
 	    if (preferences.isPreferInApp()) {
-	        String userId = preferences.getUser().getId().toString(); // Fetch the user's ID
-	        pushNotificationService.sendPushNotification(userId, subject, message);
+	        pushNotificationService.sendPushNotification(recipientId, subject, message);
 	    }
 	}
+	
 
 
 	private boolean isStatusAllowedForUser(PrintJobStatus status) {
-		return status == PrintJobStatus.PAUSED || status == PrintJobStatus.FAVORITE;
-	}
+		    return status == PrintJobStatus.FAILED || 
+		           status == PrintJobStatus.DELETED||
+		           status  == PrintJobStatus.PAUSED;
+		}
+
 
 	
 	private List<String> getAdminEmails() {
@@ -488,7 +572,9 @@ public class PrintJobService {
 	        .map(User::getEmail) // Replace `User` with your actual user entity class
 	        .collect(Collectors.toList());
 	}
-
+	
+	
+	
 
 	// This method logs the notification (for auditing purposes)
 	private void logNotification(String recipient, String message) {
@@ -631,31 +717,7 @@ public class PrintJobService {
 		}
 	}
 
-	public void markAsFavorite(Long jobId) {
-		PrintJob job = getJob(jobId);
-
-		// Capture the previous status for logging
-		PrintJobStatus previousStatus = job.getStatus();
-
-		// Update the job status to FAVORITE
-		updateJobStatus(jobId, PrintJobStatus.FAVORITE, "Job marked as favorite by user");
-
-		// Log the action with previous and new status details
-		Long currentUserId = getCurrentUserId();
-		logJobAction(jobId, // Job ID
-				previousStatus, // Previous status (before update)
-				PrintJobStatus.PAUSED, // Updated status (PAUSED in this case)
-				currentUserId, // User ID performing the action
-				"Job paused by user", // Action description
-				Optional.ofNullable(job.getUserName()), // User's username (wrapped in Optional)
-				Optional.empty(), // No previous position (if not needed, use Optional.empty())
-				Optional.empty(), // No new position (if not needed, use Optional.empty())
-				"pause", // Action type (this can be "pause" for the pausing action)
-				Optional.empty(), // No file name involved
-				Optional.empty() // No file size involved
-		);
-	}
-
+	
 	public void resumeJob(Long jobId) {
 		// Retrieve the job with authorization check (owner or admin only)
 		PrintJob job = findJobIfAuthorized(jobId);
@@ -807,9 +869,13 @@ public class PrintJobService {
 		return jobs;
 	}
 
+
 	public PrintJob findJobIfAuthorized(Long jobId) {
 		System.out.println("jobId::in findJobIfAuthorized"+jobId);
 	/*PrintJob job = printJobRepository.findById(jobId)
+
+	/*public PrintJob findJobIfAuthorized(Long jobId) {
+		PrintJob job = printJobRepository.findById(jobId)
 				.orElseThrow(() -> new ResourceNotFoundException("Job not found"));
 	
 	*/
@@ -826,9 +892,34 @@ public class PrintJobService {
 		}
 
 		throw new AccessDeniedException("User is not authorized to manage this job");
+	}*/
+	
+	
+	public PrintJob findJobIfAuthorized(Long jobId) {
+	    logger.info("Fetching print job with ID: {}", jobId);
+
+	    // Attempt to fetch the job
+	    PrintJob job = printJobRepository.findById(jobId)
+	            .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
+
+	    logger.info("Retrieved job: {}", job);
+
+	    Long currentUserId = getCurrentUserId();
+	    boolean isAdmin = hasRole("ROLE_ADMIN");
+
+	    if (isAdmin || (job.getUser() != null && job.getUser().getId().equals(currentUserId))) {
+	        logger.info("Authorized access for job ID: {}", jobId);
+	        return job;
+	    }
+
+	    logger.error("Unauthorized access to job ID: {}", jobId);
+	    throw new AccessDeniedException("User is not authorized to manage this job");
 	}
 
-	private Long getCurrentUserId() {
+
+
+
+	/*private Long getCurrentUserId() {
 		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 		if (auth == null) {
 			logger.error("User is not authenticated.");
@@ -850,7 +941,25 @@ public class PrintJobService {
 		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 		return auth.getAuthorities().stream()
 				.anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals(role));
+	}*/
+	
+	private Long getCurrentUserId() {
+	    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+	    if (auth == null) {
+	        logger.error("No authentication context available.");
+	        throw new IllegalStateException("User is not authenticated.");
+	    }
+
+	    if (!(auth.getPrincipal() instanceof CustomUserDetails)) {
+	        logger.error("Invalid principal type: {}", auth.getPrincipal());
+	        throw new IllegalStateException("Invalid principal type.");
+	    }
+
+	    CustomUserDetails userDetails = (CustomUserDetails) auth.getPrincipal();
+	    logger.info("Authenticated user ID: {}", userDetails.getId());
+	    return userDetails.getId();
 	}
+
 
 	@Transactional
 	public void addJob(PrintJobRequest jobRequest) {
@@ -883,7 +992,8 @@ public class PrintJobService {
 		job.setFileName(jobRequest.getFileName()); // Reusing the uploaded file name
 		job.setPagesPrinted(jobRequest.getPages()); // Set pages from jobRequest
 		job.setFileData(existingJob.getFileData()); // Re-use the existing file data from previously uploaded job
-
+job.setFileType(existingJob.getFileType());
+job.setUploadTimestamp(LocalDateTime.now());
 		// Save the new job to the database
 		printJobRepository.save(job);
 
@@ -925,6 +1035,10 @@ public class PrintJobService {
 
 	public void logQueuePositionChange(Long jobId, int previousPosition, int newPosition, Long userId,
 			String actionDescription) {
+		
+		PrintJob job = printJobRepository.findById(jobId)
+		        .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "jobId", jobId));
+
 		JobHistory history = new JobHistory();
 		history.setPrintJobId(jobId);
 		history.setPreviousPosition(previousPosition); // Add this field in JobHistory if needed
@@ -932,7 +1046,7 @@ public class PrintJobService {
 		history.setUserId(userId);
 		history.setComments(actionDescription);
 		history.setTimestamp(LocalDateTime.now());
-		history.setUpdatedStatus(PrintJobStatus.UNKNOWN); // Replace SOME_DEFAULT_STATUS with an appropriate enum value
+		history.setUpdatedStatus(job.getStatus()); // Replace SOME_DEFAULT_STATUS with an appropriate enum value
 		history.setActionType("Position Updated");
 		jobHistoryRepository.save(history);
 	}
@@ -1055,6 +1169,24 @@ public class PrintJobService {
 				.orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
 	}
 
+	
+    
+
+    // Regular User: Get jobs for the user
+    public List<PrintJobDTO> getJobsForUser(Long userId) {
+        List<PrintJob> jobs = printJobRepository.findByUserIdOrderByStatusAscPriorityAsc(userId);
+        return jobs.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    // Convert entity to DTO
+    private PrintJobDTO convertToDTO(PrintJob job) {
+        PrintJobDTO dto = new PrintJobDTO();
+        BeanUtils.copyProperties(job, dto);
+        return dto;
+    }
+
+
+
 	// Logic to find the last queue position
 	public int assignNextQueuePosition() {
 		// Find the maximum queue position and add 1 to get the next position
@@ -1080,6 +1212,15 @@ public class PrintJobService {
 
 		return printJobList;
 	}
+	
+	/**
+     * Check if the authenticated user has access to a specific job
+     */
+    public boolean hasAccess(Long jobId, User authenticatedUser) {
+        PrintJob job = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
+        return authenticatedUser.getRoles().contains("ROLE_ADMIN") || job.getUser().getId().equals(authenticatedUser.getId());
+    }
 
 	public List<PrintJobDTO> getPrintJobsByStatus(PrintJobStatus queued) {
 		List<PrintJob> queuedJobs = printJobRepository.findByStatusOrderByPriorityAsc(PrintJobStatus.QUEUED);
@@ -1114,6 +1255,7 @@ public class PrintJobService {
 		return printHistoryMap;
 	}
 	
+
     public void handlePrintJobFailure(PrintJob printJob, String errorDetails) {
         // Log the failure
     	failedJobService.logFailedJob(printJob, errorDetails, "System");
@@ -1195,5 +1337,181 @@ public class PrintJobService {
     }
 
 
+	public List<ReadyJobResponse> getReadyJobs() {
+	    // Fetch the list of print jobs with status READY
+	    List<PrintJob> printJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
+
+	    // Map each PrintJob entity to a PrintJobResponse DTO
+	    return printJobs.stream().map(job -> {
+	    	ReadyJobResponse response = new ReadyJobResponse();
+	        response.setId(job.getId());
+	        response.setFileName(job.getFileName());
+	        response.setEstimatedWaitTime(calculateEstimatedWaitTime(job)); // Optional: Add logic for wait time
+
+	        // Add logic to handle User entity gracefully
+	        if (job.getUser() != null && job.getUser().getId() != null && job.getUser().getId() > 0) {
+	            response.setUserName(job.getUser().getUsername());
+	        } else {
+	            response.setUserName(null); // Handle missing or invalid User
+	        }
+
+	        return response; // Return the transformed DTO
+	    }).collect(Collectors.toList()); // Collect into a list
+	}
+
+	
+	private int calculateEstimatedWaitTime(PrintJob job) {
+	    int jobsAhead = printJobRepository.countByStatusAndIdLessThan(PrintJobStatus.READY, job.getId());
+	    return jobsAhead * 5; // Each job takes 5 minutes
+	}
+/*
+	   public void handleJobFailure(PrintJob job, FailureReason failureReason) {
+		    // Increment retry count
+		    job.setRetryCount(job.getRetryCount() + 1);
+		    
+		    // Set job status to FAILED if retry limit reached, otherwise RETRYING
+		    if (job.getRetryCount() >= maxRetryCount) {
+		        job.setStatus(PrintJobStatus.FAILED);
+		       // sendAlert(job);  // Optional: Send alert if max retries reached
+		    } else {
+		        job.setStatus(PrintJobStatus.QUEUED);	        
+		        // Set failure reason
+		        job.setFailureReason(failureReason);	        
+		        // Calculate the next retry time based on failure reason
+		        Duration retryInterval;
+		        switch (failureReason) {
+		            case NETWORK_ISSUE:
+		                retryInterval = Duration.parse(retryNetworkInterval);
+		                break;
+		            case PRINTER_ERROR:
+		                retryInterval = Duration.parse(retryPrinterInterval);
+		                break;
+		            default:
+		                retryInterval = Duration.parse(defaultRetryInterval);
+		        }
+		        job.setNextRetryTime(LocalDateTime.now().plus(retryInterval));
+		    }	    
+		    // Save the job's updated state to the database
+		   // jobRepository.save(job);
+		}
+	    
+/*
+	   public void processPrintJob(PrintJob job) {
+		    try {
+		        updateJobStatus(job.getId(), PrintJobStatus.QUEUED, "Print job added to queue");
+		             
+		        if (job.hasNetworkConnectivityIssues()) {
+		            throw new NetworkException("Network connectivity issue detected");
+		        } else if (job.hasPrinterHardwareIssues()) {
+		            throw new PrinterException("Printer hardware issue detected");
+		        }
+
+
+		        // Additional job processing logic
+
+		    } catch (NetworkException e) {
+		        handleJobFailure(job, FailureReason.NETWORK_ISSUE);
+		    } catch (PrinterException e) {
+		        handleJobFailure(job, FailureReason.PRINTER_ERROR);
+		    } catch (Exception e) {
+		        handleJobFailure(job, FailureReason.UNKNOWN_ERROR);
+		    }
+		}
+	   
+	   public boolean retryFailedJobById(Long jobId) {
+		    // Find the job by its ID
+		    Optional<PrintJob> optionalJob = printJobRepository.findById(jobId);
+		    
+		    if (optionalJob.isPresent()) {
+		        PrintJob job = optionalJob.get();
+		        
+		        // Check if the job is in a FAILED state and is eligible for retry
+		        if (job.getStatus() == PrintJobStatus.FAILED && job.getRetryCount() < maxRetryCount) {
+		            // Increment retry count and set status to RETRYING
+		            job.incrementRetryCount();
+		            job.setStatus(PrintJobStatus.QUEUED);
+		            printJobRepository.save(job);         
+		            // Attempt to process the job again
+		            processPrintJob(job);
+		            return true; // Retry was successfully triggered
+		        }
+		    }
+		    
+		    return false; // Job not found or not eligible for retry
+		}
+
+
+	
+*/
+
+
+	public void markAsFavorite(Long jobId, String username) {
+	    PrintJob job = printJobRepository.findById(jobId)
+	        .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "jobId", jobId));
+
+	    // Validate ownership or admin role
+	    if (!job.getUser().getEmail().equals(username) && !isAdmin()) {
+	        throw new AccessDeniedException("You are not authorized to mark this job as favorite.");
+	    }
+
+	    if (job.isFavorite()) {
+	        logger.info("Job {} is already marked as favorite by user {}", jobId, username);
+	        return;
+	    }
+
+	    job.setFavorite(true);
+	    printJobRepository.save(job);
+
+	    logger.info("Job {} marked as favorite by user {}", jobId, username);
+	}
+
+
+	private boolean isAdmin() {
+	    return SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+	        .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+	}
+
+	
+	public void removeFromFavorite(Long jobId, String userId) {
+	    PrintJob job = printJobRepository.findById(jobId)
+	        .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "jobId", jobId));
+
+	    if (!job.getUser().getId().toString().equals(userId)) {
+	    	throw new AccessDeniedException("You are not authorized to mark this job as favorite.");
+
+	    }
+
+	    job.setFavorite(false);
+	    printJobRepository.save(job);
+	}
+
+	
+	public Boolean isOwner(Long jobId, String username) {
+		Long isValid = printJobRepository.existsByIdAndUser_Username(jobId, username);
+		if (isValid == 1) {
+			return true;
+		}
+	    return false;
+	}
+
+	
+	@Transactional
+	public List<PrintJob> getAllFavoriteJobs() {
+	    List<PrintJob> jobs = printJobRepository.findAllFavoritesWithUsers();
+	    jobs.forEach(job -> Hibernate.initialize(job.getUser()));
+	    return jobs;
+	}
+
+	@Transactional
+	public List<PrintJob> getFavoriteJobs(String userId) {
+	    List<PrintJob> jobs = printJobRepository.findFavoritesByUser(Long.valueOf(userId));
+	    jobs.forEach(job -> Hibernate.initialize(job.getUser()));
+	    return jobs;
+	}
+
+
+
+
 
 }
+

@@ -31,8 +31,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
 
-@Entity(name = "EMAIL_VERIFICATION_TOKEN")
+@Entity
+@Table(name = "email_verification_token")
 public class EmailVerificationToken extends DateAudit {
 
     @Id
@@ -45,7 +47,7 @@ public class EmailVerificationToken extends DateAudit {
     private String token;
 
     @OneToOne(targetEntity = User.class, fetch = FetchType.EAGER)
-    @JoinColumn(nullable = false, name = "USER_ID")
+    @JoinColumn(nullable = true, name = "USER_ID")
     private User user;
 
     @Column(name = "TOKEN_STATUS")

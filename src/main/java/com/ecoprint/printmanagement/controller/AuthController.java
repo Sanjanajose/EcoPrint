@@ -20,6 +20,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.repository.query.Param;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +44,7 @@ import com.ecoprint.printmanagement.exception.TokenRefreshException;
 import com.ecoprint.printmanagement.exception.UserLoginException;
 import com.ecoprint.printmanagement.exception.UserRegistrationException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+import com.ecoprint.printmanagement.model.LoginRequest2FA;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
 import com.ecoprint.printmanagement.model.payload.JwtAuthenticationResponse;
@@ -114,7 +116,7 @@ public class AuthController {
         return ResponseEntity.ok(new ApiResponse(true, usernameExists.toString()));
     }
     
-    @Operation(summary = "Register a new user", description = "User registration with profile picture upload")
+   /* @Operation(summary = "Register a new user", description = "User registration with profile picture upload")
     @PostMapping("/registers")
     public ResponseEntity<User> registerUser(
             @RequestParam("username") String username,
@@ -127,7 +129,7 @@ public class AuthController {
         user.setPassword(password);  // In real applications, you should hash the password before storing
 		return null;
 
-    }
+    } */
     
     
     @PostMapping("/register")
@@ -171,31 +173,23 @@ public class AuthController {
     @Operation(summary = "Logs the user into the system and returns the auth tokens, with optional two-factor authentication (2FA) if enabled.")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         // Step 1: Authenticate the user
-        Authentication authentication = authService.authenticateUser(loginRequest)
-                .orElseThrow(() -> new UserLoginException("Couldn't login user [" + loginRequest + "]"));
-
-        // Get custom user details
-        CustomUserDetails customUserDetails = (CustomUserDetails) authentication.getPrincipal();
+        User user = authService.validateUserCredentials(loginRequest.getIdentifier(), loginRequest.getPassword());
+        CustomUserDetails customUserDetails = new CustomUserDetails(user); // Assuming you have a constructor for this
+        Authentication authentication = new UsernamePasswordAuthenticationToken(customUserDetails, null, customUserDetails.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         // Log the login activity
-        Long userId = customUserDetails.getId();
+        Long userId = user.getId();
         userActivityService.logUserActivity(userId, "LOGIN", "User logged in");
-
-        // Fetch the user and check if 2FA is enabled
-       // User user = customUserDetails.getUser(); // Assuming you can access User from CustomUserDetails
-        User user = authService.validateUserCredentials(loginRequest.getUsername(), loginRequest.getPassword());
 
         if (user.isTwoFactorEnabled()) {
             // Step 2: Handle 2FA
             if (loginRequest.getOtp() != null) {
-                // Validate the provided OTP
                 boolean isValidOtp = otpService.validateOTP(userId, loginRequest.getOtp());
                 if (isValidOtp) {
                     // OTP is valid, proceed with generating tokens
                     return generateTokens(authentication, loginRequest);
                 } else {
-                    // OTP is invalid or expired
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                             .body("Invalid or expired OTP. Please try again.");
                 }
@@ -204,15 +198,13 @@ public class AuthController {
                 String otp = otpService.generateAndSaveOTP(userId);
                 if ("email".equalsIgnoreCase(user.getPreferred2FAMethod())) {
                     mailService.sendOTPEmail(user.getEmail(), otp);
-                } /* else if ("sms".equalsIgnoreCase(user.getPreferred2FAMethod())) {
-                    smsService.sendOTPSMS(user.getPhone(), otp);
-                } */
+                } 
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body("OTP sent. Please enter the OTP to complete login.");
+                        .body("OTP sent. Please enter thRe OTP to complete login.");
             }
         }
 
-        // Step 3: If 2FA is not enabled, proceed with normal login flow
+        // Step 3: Normal login flow if 2FA is not enabled
         return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
                 .map(RefreshToken::getToken)
                 .map(refreshToken -> {
@@ -221,6 +213,7 @@ public class AuthController {
                 })
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
+
     
     
 
