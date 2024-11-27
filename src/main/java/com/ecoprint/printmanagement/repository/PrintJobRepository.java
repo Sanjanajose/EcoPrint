@@ -31,7 +31,13 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
    
     // Find PrintJob by file name
     Optional<PrintJob> findByFileName(String fileName);
+    
+    
+    @Query("SELECT p FROM PrintJob p WHERE p.id = :jobId")
+    Optional<PrintJob> findJobById(@Param("jobId") Long jobId);
 
+
+    
     
 
 }

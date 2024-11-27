@@ -20,6 +20,12 @@ public class FailedJobDTO {
     private String printerName;
     
     private Long newPrinterId;
+    
+    private Long oldPrinterId;
+    
+    
+
+
 
     
     // Getters and Setters
@@ -70,5 +76,30 @@ public class FailedJobDTO {
     public void setNewPrinterId(Long newPrinterId) {
         this.newPrinterId = newPrinterId;
     }
+
+    
+	public Long getOldPrinterId() {
+		return oldPrinterId;
+	}
+
+	public void setOldPrinterId(Long oldPrinterId) {
+		this.oldPrinterId = oldPrinterId;
+	}
+
+	public FailedJobDTO(@NotNull(message = "Job ID is required.") Long jobId,
+			@NotEmpty(message = "Failure reason is required.") String failureReason, String printerStatus,
+			int retryCount, String printerName,Long oldPrinterId ,Long newPrinterId) {
+		super();
+		this.jobId = jobId;
+		this.failureReason = failureReason;
+		this.printerStatus = printerStatus;
+		this.retryCount = retryCount;
+		this.printerName = printerName;
+		this.oldPrinterId=oldPrinterId;
+		this.newPrinterId = newPrinterId;
+	}
+
+    
+   
 
 }

@@ -143,6 +143,8 @@ public class PrintJobController {
 
         // Delegate the job status update to the service method, including logging and notifications
         try {
+        	
+        	System.out.println("This contains values"+jobId+"jobId:::");
             printJobService.updateJobStatus(jobId, status, "Status updated to " + status.name());
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Print job not found");
@@ -173,7 +175,17 @@ public class PrintJobController {
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     @Operation(summary = "Cancel print job", description = "Allows a user or admin to cancel a print job.")
     public ResponseEntity<String> cancelJob(@PathVariable Long jobId) {
-        return updateJobStatus(jobId, PrintJobStatus.FAILED);
+        try {
+            printJobService.cancelJob(jobId);
+            return ResponseEntity.ok("Print job canceled successfully and marked as FAILED");
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Print job not found");
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            logger.error("Unexpected error during cancel operation", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error occurred");
+        }
     }
 
     @PutMapping("/{jobId}/favorite")
@@ -340,7 +352,7 @@ public class PrintJobController {
     @PutMapping("/jobs/{jobId}/resume")
     @Operation(summary = "allows to resume the paused print jobs ")
     public ResponseEntity<String> resumeJob(@PathVariable Long jobId) {
-        printJobService.resumeJob(jobId);
+        printJobService.resumeJob(jobId);  
         return ResponseEntity.ok("Job resumed successfully");
     }
     

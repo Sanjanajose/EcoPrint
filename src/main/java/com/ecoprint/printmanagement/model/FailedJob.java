@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -13,15 +14,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "failed_jobs")
-
 public class FailedJob {
 	
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(name = "job_id", nullable = false)
-    private Long jobId;
 
     @Column(name = "failed_at", nullable = false)
     private LocalDateTime failedAt;
@@ -35,16 +32,24 @@ public class FailedJob {
     @Column(name = "retry_count", nullable = false)
     private int retryCount;
     
+    @Column(name = "failure_reason")
+    private String failureReason;
+
+    
     
     @ManyToOne
     @JoinColumn(name = "print_job_id", nullable = false)
     private PrintJob printJob;
 
     
-    @ManyToOne
-    @JoinColumn(name = "printer_id")
+   
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "old_printer_id")
     private Printer printer;
-    
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "new_printer_id")
+    private Printer newPrinter;
 
 
 	public Long getId() {
@@ -55,14 +60,7 @@ public class FailedJob {
 		this.id = id;
 	}
 
-	public Long getJobId() {
-		return jobId;
-	}
-
-	public void setJobId(Long jobId) {
-		this.jobId = jobId;
-	}
-
+	
 	public LocalDateTime getFailedAt() {
 		return failedAt;
 	}
@@ -111,6 +109,23 @@ public class FailedJob {
 		this.printer = printer;
 	}
 
+	public Printer getNewPrinter() {
+		return newPrinter;
+	}
+
+	public void setNewPrinter(Printer newPrinter) {
+		this.newPrinter = newPrinter;
+	}
+
+	public String getFailureReason() {
+		return failureReason;
+	}
+
+	public void setFailureReason(String failureReason) {
+		this.failureReason = failureReason;
+	}
+
+	
 
     
 

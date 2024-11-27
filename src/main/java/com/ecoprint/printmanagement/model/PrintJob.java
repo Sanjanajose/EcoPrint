@@ -48,7 +48,7 @@ public class PrintJob {
     @Column(name = "priority")
     private Priority priority;
 
-    // File Details
+    // File Details     
     @NotNull(message = "File cannot be null.")
     @NotEmpty(message = "fileName must not be empty")
     @Column(name = "file_name", nullable = false) 
@@ -79,7 +79,7 @@ public class PrintJob {
 
     // Queue Management
     @Column
-    private int queuePosition;
+    private Integer queuePosition;
 
 
     // Print Details
@@ -165,8 +165,8 @@ public class PrintJob {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
-    public int getQueuePosition() { return queuePosition; }
-    public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
+    //public int getQueuePosition() { return queuePosition; }
+    //public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
 
 
     public int getPagesPrinted() { return pagesPrinted; }
@@ -241,7 +241,16 @@ public class PrintJob {
 	public void setPrinter(Printer printer) {
 		this.printer = printer;
 	}
+
+	public Integer getQueuePosition() {
+		return queuePosition;
+	}
+
+	public void setQueuePosition(Integer queuePosition) {
+		this.queuePosition = queuePosition;
+	}
     
+	
     
 
 }
