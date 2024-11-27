@@ -17,6 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -28,6 +29,7 @@ import org.springframework.context.annotation.Bean;
 @SpringBootApplication(scanBasePackages = "com.ecoprint.printmanagement") // Scans this package and sub-packages
 @EnableAsync
 @EnableJpaRepositories(basePackages = "com.ecoprint.printmanagement.repository")
+@EntityScan(basePackages = {"com.ecoprint.printmanagement.model"})
 @EnableScheduling
 public class AuthAppApplication {
 	private final RoleService roleService ;

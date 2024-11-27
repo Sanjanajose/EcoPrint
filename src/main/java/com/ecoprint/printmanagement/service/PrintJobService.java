@@ -21,6 +21,9 @@ import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 
+import org.springframework.context.annotation.Lazy;
+
+
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -36,7 +39,11 @@ import com.ecoprint.printmanagement.exception.NetworkException;
 import com.ecoprint.printmanagement.exception.PrinterException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+
+import com.ecoprint.printmanagement.model.FailedJob;
+
 import com.ecoprint.printmanagement.model.FailureReason;
+
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.NotificationLog;
 import com.ecoprint.printmanagement.model.PrintHistoryDTO;
@@ -45,15 +52,18 @@ import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobDTO;
 import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
+import com.ecoprint.printmanagement.model.Printer;
 import com.ecoprint.printmanagement.model.Priority;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.SubmittedJobs;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserNotificationPreferences;
+import com.ecoprint.printmanagement.repository.FailedJobRepository;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
+import com.ecoprint.printmanagement.repository.PrinterRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.SubmitJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
@@ -95,12 +105,21 @@ public class PrintJobService {
 	@Autowired
 	private PrintJobRepository printJobRepository;
 	
-	
     @Autowired
     private UserNotificationPreferencesService userNotificationPreferencesService;
 
+    
+    @Autowired
+	private PrinterRepository printerRepository;
+	
+
+    @Autowired
+    private FailedJobRepository failedJobRepository;
+
+
     @Autowired
     private AuthService authservice;
+
     
     @Qualifier("emailNotificationService") // Specify the bean you want to inject
     private NotificationService emailNotificationService;
@@ -115,6 +134,11 @@ public class PrintJobService {
 
 	@Autowired
 	private UserService userService; // To get current user info
+	
+    @Lazy
+    @Autowired
+    private FailedJobService failedJobService;
+
 	
 
 	private final Tika tika = new Tika();
@@ -594,7 +618,7 @@ this.pushNotificationService = pushNotificationService;
 				Optional.of(priority.name()), // Updated priority
 				Optional.empty()); // No file size or name needed
 	}
-
+/*
 	public void cancelJob(Long jobId) {
 		// Retrieve the job and ensure the user has authorization
 		PrintJob printJob = findJobIfAuthorized(jobId);
@@ -617,6 +641,49 @@ this.pushNotificationService = pushNotificationService;
 		logJobAction(jobId, previousStatus, PrintJobStatus.DELETED, currentUserId, "Job canceled by user",
 				Optional.of(printJob.getUserName()), Optional.empty(), Optional.empty(), "job_cancellation",
 				Optional.empty(), Optional.empty());
+	}
+*/
+	
+	public void cancelJob(Long jobId) {
+	    // Retrieve the job with authorization check
+	    PrintJob printJob = findJobIfAuthorized(jobId);
+
+	    // Ensure only jobs that are not COMPLETED or DELETED can be canceled
+	    if (printJob.getStatus() == PrintJobStatus.COMPLETED || printJob.getStatus() == PrintJobStatus.DELETED) {
+	        throw new IllegalStateException("Cannot cancel a job that is already completed or deleted.");
+	    }
+
+	    // Capture the previous status for logging
+	    PrintJobStatus previousStatus = printJob.getStatus();
+
+	    // Update the job's status to FAILED
+	    printJob.setStatus(PrintJobStatus.FAILED);
+	    printJob.setFailedAt(LocalDateTime.now());
+
+	    // Save the updated job
+	    savePrintJob(printJob);
+
+	    // Log the cancellation action
+	    Long currentUserId = getCurrentUserId();
+	    logJobAction(jobId, previousStatus, PrintJobStatus.FAILED, currentUserId, "Job canceled by user",
+	                 Optional.ofNullable(printJob.getUserName()), Optional.empty(), Optional.empty(), "cancel_job",
+	                 Optional.empty(), Optional.empty());
+
+	    // Save the failed job into FailedJob table
+	    FailedJob failedJob = new FailedJob();
+	    failedJob.setFailedAt(LocalDateTime.now());
+	    failedJob.setErrorDetails("Job canceled by user."); // You can replace this with actual error details
+	    failedJob.setFailedBy(currentUserId != null ? currentUserId.toString() : "Unknown User");
+	    failedJob.setRetryCount(0); // Initial retry count
+	    failedJob.setPrintJob(printJob);
+	    failedJob.setPrinter(printJob.getPrinter()); // If PrintJob has a printer reference
+
+	    saveFailedJob(failedJob); // Method to save failed job in FailedJob table
+	}
+
+	
+	private void saveFailedJob(FailedJob failedJob) {
+	    failedJobRepository.save(failedJob);
 	}
 
 	public void pauseJob(Long jobId) {
@@ -802,9 +869,18 @@ this.pushNotificationService = pushNotificationService;
 		return jobs;
 	}
 
+
+	public PrintJob findJobIfAuthorized(Long jobId) {
+		System.out.println("jobId::in findJobIfAuthorized"+jobId);
+	/*PrintJob job = printJobRepository.findById(jobId)
+
 	/*public PrintJob findJobIfAuthorized(Long jobId) {
 		PrintJob job = printJobRepository.findById(jobId)
 				.orElseThrow(() -> new ResourceNotFoundException("Job not found"));
+	
+	*/
+    PrintJob job = printJobRepository.findJobById(jobId)
+            .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
 
 		// Get the authenticated user’s ID and roles
 		Long currentUserId = getCurrentUserId();
@@ -1180,6 +1256,87 @@ job.setUploadTimestamp(LocalDateTime.now());
 	}
 	
 
+    public void handlePrintJobFailure(PrintJob printJob, String errorDetails) {
+        // Log the failure
+    	failedJobService.logFailedJob(printJob, errorDetails, "System");
+
+        // Update the print job status
+        printJob.setStatus(PrintJobStatus.FAILED);
+        // Save the print job (use your existing repository)
+    }
+    
+    
+    public void retryPrintJob(PrintJob printJob) {
+        try {
+            // Add logic to retry the print job
+            printJob.setStatus(PrintJobStatus.READY); // Update status
+            printJobRepository.save(printJob); // Save the updated print job
+            System.out.println("Print job retried successfully: " + printJob.getFileName());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to retry print job: " + e.getMessage());
+        }
+    }
+/*
+    public void processPrintJob(PrintJob printJob) {
+        // Validate the print job
+        if (printJob == null || printJob.getFileData() == null || printJob.getPrinterId() == null) {
+            throw new IllegalArgumentException("Invalid print job data.");
+        }
+
+        try {
+            // Simulate communication with the printer
+           Printer printer = printerRepository.findById(printJob.getPrinterId())
+                    .orElseThrow(() -> new RuntimeException("Printer not found"));
+
+            // Send the job to the printer (placeholder for actual printing logic)
+           boolean success = printerService.sendPrintJob(printer, printJob);
+
+            if (success) {
+                // Update job status to COMPLETED
+                printJob.setStatus(PrintJobStatus.COMPLETED);
+                printJob.setCompletedAt(LocalDateTime.now());
+                printJobRepository.save(printJob);
+            } else {
+                // Update job status to FAILED
+                throw new RuntimeException("Print job failed at printer level.");
+            }
+        } catch (Exception e) {
+            // Handle failure
+            printJob.setStatus(PrintJobStatus.FAILED);
+            printJob.setFailedAt(LocalDateTime.now());
+            printJobRepository.save(printJob);
+            throw new RuntimeException("Failed to process print job: " + e.getMessage(), e);
+        }
+    }*/
+    
+    
+    public void processPrintJob(FailedJob failedJob) {
+        if (failedJob == null || failedJob.getPrintJob() == null) {
+            throw new IllegalArgumentException("Invalid failed job data.");
+        }
+
+        PrintJob failedPrintJob = failedJob.getPrintJob();
+
+        // Prepare a PrintJobRequest object from the failed PrintJob
+        PrintJobRequest jobRequest = new PrintJobRequest();
+        jobRequest.setFileName(failedPrintJob.getFileName());
+        jobRequest.setDescription(failedPrintJob.getDescription());
+        jobRequest.setPages(failedPrintJob.getPagesPrinted());
+        //jobRequest.setCost(failedPrintJob.getCost());
+
+        try {
+            // Call addJob to retry the print job
+            addJob(jobRequest);
+
+            // If successful, mark the failed job as resolved
+            failedJobRepository.delete(failedJob);
+        } catch (Exception e) {
+            // Handle failure to re-add job
+            throw new RuntimeException("Failed to retry print job: " + e.getMessage(), e);
+        }
+    }
+
+
 	public List<ReadyJobResponse> getReadyJobs() {
 	    // Fetch the list of print jobs with status READY
 	    List<PrintJob> printJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
@@ -1351,6 +1508,7 @@ job.setUploadTimestamp(LocalDateTime.now());
 	    jobs.forEach(job -> Hibernate.initialize(job.getUser()));
 	    return jobs;
 	}
+
 
 
 

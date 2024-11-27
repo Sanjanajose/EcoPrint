@@ -1,10 +1,19 @@
 package com.ecoprint.printmanagement.model;
  
 import java.time.LocalDateTime;
+
+import java.util.List;
+
+import com.ecoprint.printmanagement.util.Base64Serializer;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
+import jakarta.persistence.CascadeType;
+
  
 import com.ecoprint.printmanagement.util.Base64Serializer;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
  
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,6 +25,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
@@ -31,6 +41,12 @@ public class PrintJob {
     @Column(name = "id") 
     private Long id;
 
+
+    //@ManyToOne(fetch = FetchType.LAZY)
+    //@JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
+    //private User user;  // The user associated with this print job
+
+
  
    
 
@@ -40,6 +56,7 @@ public class PrintJob {
     private User user;  // The user associated with this print job */
     
     
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", nullable = false) // Ensure the column name is 'user_id'
     private User user;
@@ -49,8 +66,13 @@ public class PrintJob {
     @Enumerated(EnumType.STRING)
     @Column(name = "priority")
     private Priority priority;
+
+
+    // File Details     
+
  
     // File Details
+
     @NotNull(message = "File cannot be null.")
     @NotEmpty(message = "fileName must not be empty")
     @Column(name = "file_name", nullable = false) 
@@ -82,6 +104,9 @@ public class PrintJob {
     @Column
 
     private Integer queuePosition;
+
+
+    private Integer queuePosition;
  
  
     public Integer getQueuePosition() {
@@ -98,6 +123,7 @@ public class PrintJob {
     
     @Column(nullable = false)
     private boolean favorite = false;
+
 
 
     // Print Details
@@ -143,6 +169,16 @@ public class PrintJob {
     @Column(name = "favorite_at")
     private LocalDateTime favoriteAt;
     
+
+    @OneToMany(mappedBy = "printJob", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FailedJob> failedJobs;
+    
+    @ManyToOne
+    @JoinColumn(name = "printer_id", nullable = false)
+    private Printer printer;
+
+
+
     @Column(name = "color",nullable = true)
     private String color;
 
@@ -155,6 +191,7 @@ public class PrintJob {
 
     @Column(name = "paper_size",nullable = true)
     private String paperSize;
+
 
 
     
@@ -196,8 +233,16 @@ public class PrintJob {
  
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+
+    //public int getQueuePosition() { return queuePosition; }
+    //public void setQueuePosition(int queuePosition) { this.queuePosition = queuePosition; }
+
+
+
   
  
+
     public int getPagesPrinted() { return pagesPrinted; }
     public void setPagesPrinted(int pagesPrinted) { this.pagesPrinted = pagesPrinted; }
  
@@ -266,6 +311,35 @@ public class PrintJob {
 		return color;
 	}
 
+
+	public List<FailedJob> getFailedJobs() {
+		return failedJobs;
+	}
+
+	public void setFailedJobs(List<FailedJob> failedJobs) {
+		this.failedJobs = failedJobs;
+	}
+
+	public Printer getPrinter() {
+		return printer;
+	}
+
+	public void setPrinter(Printer printer) {
+		this.printer = printer;
+	}
+
+	public Integer getQueuePosition() {
+		return queuePosition;
+	}
+
+	public void setQueuePosition(Integer queuePosition) {
+		this.queuePosition = queuePosition;
+	}
+    
+	
+    
+
+
 	public void setColor(String color) {
 		this.color = color;
 	}
@@ -289,4 +363,5 @@ public class PrintJob {
     
 	    
  
+
 }
