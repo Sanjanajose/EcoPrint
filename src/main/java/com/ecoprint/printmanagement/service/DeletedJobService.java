@@ -12,11 +12,12 @@ import com.ecoprint.printmanagement.repository.DeletionAuditLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import java.util.List;
-
+import java.util.stream.Collectors;
 
 import jakarta.transaction.Transactional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.AccessDeniedException;
@@ -43,6 +44,19 @@ public class DeletedJobService {
 
     @Autowired
     private DeletionAuditLogRepository deletionAuditLogRepository;
+    
+    
+    
+    private final EmailNotificationService emailNotificationService;
+    private final PushNotificationService pushNotificationService;
+
+    @Autowired
+    public DeletedJobService(EmailNotificationService emailNotificationService,
+                             PushNotificationService pushNotificationService) {
+        this.emailNotificationService = emailNotificationService;
+        this.pushNotificationService = pushNotificationService;
+    }
+
     
    /* @Transactional
     public void deleteJob(Long jobId, Long deletedByUserId, String reason) {
@@ -132,6 +146,8 @@ public class DeletedJobService {
         deletionAuditLog.setReasonForDeletion(reason);
         deletionAuditLogRepository.save(deletionAuditLog);
         System.out.println("Deletion audit log created for job ID: " + jobId);
+        
+        notifyJobDeletion(jobId, deletedByUserId, reason);
     }
 
 
@@ -168,6 +184,8 @@ public class DeletedJobService {
         deletedJobRepository.delete(deletedJob);
      // Log the action
         activityLogService.logActivity("DELETE_JOB", "System", userId, "Deleted job with ID: " + jobId);
+        
+        notifyJobRestoration(jobId, userId);
 
     }
     
@@ -175,44 +193,86 @@ public class DeletedJobService {
       //  return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, userId);
     //}
     
-    public List<DeletedJobResponse> getDeletedJobsReport(LocalDateTime startDate, LocalDateTime endDate, Long userId) throws AccessDeniedException {
-        // Get the currently authenticated user
-        User currentUser = userservice.getCurrentUser();
+ // For Admin: Fetch all deleted jobs with filters
+    public List<DeletedJobResponse> fetchDeletedJobsForAdmin(LocalDateTime startDate, LocalDateTime endDate, Long deletedByUserId) {
+        return deletedJobRepository.findDeletedJobs(startDate, endDate, deletedByUserId)
+                .stream()
+                .map(this::mapToDeletedJobResponse)
+                .collect(Collectors.toList());
+    }
+ // For User: Fetch only their deleted jobs
+    public List<DeletedJobResponse> fetchDeletedJobsForUser(Long userId, LocalDateTime startDate, LocalDateTime endDate) {
+        return deletedJobRepository.findDeletedJobsByUser(userId, startDate, endDate)
+                .stream()
+                .map(this::mapToDeletedJobResponse)
+                .collect(Collectors.toList());
+    }
 
-        // If the user is an admin, they can view all reports
-        if (currentUser.getRoles().contains("ROLE_ADMIN")) {
-            return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, userId);
-        }
-
-        // If the user is not an admin, ensure they can view only their own jobs
-        if (userId != null && !userId.equals(currentUser.getId())) {
-            throw new AccessDeniedException("You are not authorized to view other users' reports.");
-        }
-
-        return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, currentUser.getId());
+    private DeletedJobResponse mapToDeletedJobResponse(DeletedJob deletedJob) {
+        return new DeletedJobResponse(
+            deletedJob.getId(),
+            deletedJob.getDeletedAt(),
+            deletedJob.getDeletedBy().getUsername(), // Assuming deletedBy is a User object with a username
+            deletedJob.getReasonForDeletion(),
+            deletedJob.getPreviousStatus(),
+            deletedJob.getRestorableUntil()
+        );
     }
 
     
-    public List<DeletedJobResponse> getDeletedJobsReportWithAccessControl(
-            LocalDateTime startDate, LocalDateTime endDate, Long userId) throws AccessDeniedException {
-
-        // Get the currently logged-in user
-        User currentUser = userservice.getCurrentUser();
-
-        // Admins can view all reports
-        if (currentUser.getRoles().contains("ROLE_ADMIN")) {
-            return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, userId);
-        }
-
-        // For regular users, restrict to their own jobs
-        if (userId != null && !userId.equals(currentUser.getId())) {
-            throw new AccessDeniedException("You are not authorized to view other users' reports.");
-        }
-
-        // Fetch report for the current user only
-        return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, currentUser.getId());
+    public List<DeletedJobResponse> getDeletedJobsForAdmin(LocalDateTime startDate, LocalDateTime endDate) {
+        return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, null);
     }
+
+    public List<DeletedJobResponse> getDeletedJobsForUser(LocalDateTime startDate, LocalDateTime endDate, Long userId) {
+        return deletedJobRepository.findDeletedJobSummaries(startDate, endDate, userId);
+    }
+
+    
+    public void notifyJobDeletion(Long jobId, Long userId, String reason) {
+        PrintJob job = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new RuntimeException("Job not found"));
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        String message = String.format(
+            "Dear %s, your job with ID %d titled '%s' has been deleted. Reason: %s",
+            user.getUsername(), job.getId(), job.getDescription(), reason
+        );
+        String emailRecipient = user.getEmail();
+        String subject = "Notification: Your Job Has Been Deleted";
+
+        // Send email notification
+        emailNotificationService.sendEmailNotification(emailRecipient, subject, message);
+        
+        // Optionally send an in-app notification (if applicable)
+        pushNotificationService.sendPushNotification(userId, "Job Deleted", message);
+    }
+    
+    
+    public void notifyJobRestoration(Long jobId, Long userId) {
+        PrintJob job = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new RuntimeException("Job not found"));
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String message = String.format(
+            "Dear %s, your job with ID %d titled '%s' has been restored successfully.",
+            user.getUsername(), job.getId(), job.getDescription()
+        );
+        String emailRecipient = user.getEmail();
+        String subject = "Notification: Your Job Has Been Restored";
+
+        // Send email notification
+        emailNotificationService.sendEmailNotification(emailRecipient, subject, message);
+        
+        // Optionally send an in-app notification (if applicable)
+        pushNotificationService.sendPushNotification(userId, "Job Restored", message);
+    }
+
+
+
+
 }
-
-
-

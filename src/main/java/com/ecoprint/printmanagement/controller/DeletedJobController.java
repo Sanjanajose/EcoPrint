@@ -1,5 +1,6 @@
 package com.ecoprint.printmanagement.controller;
 
+import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.DeletedJob;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
@@ -9,13 +10,17 @@ import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.service.DeletedJobService;
 import com.ecoprint.printmanagement.service.ReportExportService;
+import com.ecoprint.printmanagement.service.UserService;
 
+
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 
 import com.ecoprint.printmanagement.dto.DeletedJobResponse;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 
 import org.apache.http.HttpStatus;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -24,13 +29,21 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
 import java.util.List;
+
+
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/deleted-jobs")
@@ -45,11 +58,18 @@ public class DeletedJobController {
     @Autowired
     private UserRepository userRepository;
 
-    private final ReportExportService reportExportService;
+ // Add the @Autowired annotation or constructor injection for UserService
+    @Autowired
+    private UserService userService;
+
+    
+    @Autowired
+    private ReportExportService reportService;
+
 
     @Autowired
     public DeletedJobController(ReportExportService reportExportService) {
-        this.reportExportService = reportExportService;
+        this.reportService = reportExportService;
     }
 
     @DeleteMapping("/{jobId}")
@@ -99,40 +119,98 @@ public class DeletedJobController {
         deletedJobService.restoreDeletedJob(jobId, userId);
         return ResponseEntity.ok("Job restored successfully.");
     }
-    @Transactional
-    @GetMapping("/report")
-    public ResponseEntity<List<DeletedJobResponse>> getDeletedJobsReport(
+    
+    
+ // Admin Endpoint: Fetch all deleted jobs
+    @GetMapping("/admin/deleted-jobs")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<List<DeletedJobResponse>> getDeletedJobsForAdmin(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(required = false) Long userId) throws AccessDeniedException {
-
-        // Delegating access control and report fetching to the service
-        List<DeletedJobResponse> report = deletedJobService.getDeletedJobsReportWithAccessControl(startDate, endDate, userId);
-        return ResponseEntity.ok(report);
+            @RequestParam(required = false) Long deletedByUserId) {
+        List<DeletedJobResponse> deletedJobs = deletedJobService.fetchDeletedJobsForAdmin(startDate, endDate, deletedByUserId);
+        return ResponseEntity.ok(deletedJobs);
     }
 
-
-
-    @GetMapping("/export/csv")
-    public ResponseEntity<Resource> exportDeletedJobsReport(
+    // User Endpoint: Fetch their own deleted jobs
+    @GetMapping("/user/deleted-jobs")
+    @PreAuthorize("hasRole('ROLE_USER')")
+    public ResponseEntity<List<DeletedJobResponse>> getDeletedJobsForUser(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+        List<DeletedJobResponse> deletedJobs = deletedJobService.fetchDeletedJobsForUser(currentUser.getId(), startDate, endDate);
+        return ResponseEntity.ok(deletedJobs);
+    }
+    
+    
+    /*@GetMapping("/export/csv")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public void exportDeletedJobsToCSV(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(required = false) Long userId) throws AccessDeniedException {
-
-        List<DeletedJobResponse> report = deletedJobService.getDeletedJobsReport(startDate, endDate, userId);
-
-        if (report.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.SC_NO_CONTENT)
-                    .body(new InputStreamResource(new ByteArrayInputStream("No data found.".getBytes(StandardCharsets.UTF_8))));
+            @RequestParam(required = false) Long deletedByUserId,
+            HttpServletResponse response) throws IOException {
+        List<DeletedJobResponse> deletedJobs = deletedJobService.fetchDeletedJobsForAdmin(startDate, endDate, deletedByUserId);
+        
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=deleted_jobs_report.csv");
+        
+        try (PrintWriter writer = response.getWriter()) {
+            writer.println("Job ID,Deleted At,Deleted By,Reason,Previous Status,Restorable Until");
+            for (DeletedJobResponse job : deletedJobs) {
+                writer.printf("%d,%s,%d,%s,%s,%s%n",
+                        job.getId(),
+                        job.getDeletedAt(),
+                        job.getDeletedByUsername(),
+                        job.getReasonForDeletion(),
+                        job.getPreviousStatus(),
+                        job.getRestorableUntil());
+            }
         }
-
-        String csv = reportExportService.generateCSVReport(report);
-        InputStreamResource resource = new InputStreamResource(new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)));
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=deleted-jobs-report.csv")
-                .contentType(MediaType.TEXT_PLAIN)
-                .body(resource);
     }
+*/
+    
+    @GetMapping("/deleted-jobs/export")
+    public ResponseEntity<?> exportDeletedJobs(
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+        Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            boolean isAdmin = authentication.getAuthorities().stream()
+                              .anyMatch(grantedAuthority -> 
+                                  grantedAuthority.getAuthority().equals("ROLE_ADMIN") || 
+                                  grantedAuthority.getAuthority().equals("ROLE_SUPERADMIN"));
+
+            List<DeletedJobResponse> deletedJobs;
+            if (isAdmin) {
+                deletedJobs = deletedJobService.getDeletedJobsForAdmin(startDate, endDate);
+            } else {
+                Long userId = userService.findUserIdByUsername(username);
+               
+                deletedJobs = deletedJobService.getDeletedJobsForUser(startDate, endDate, userId);
+            }
+
+            if (deletedJobs.isEmpty()) {
+                return ResponseEntity.noContent().build();
+            }
+
+            byte[] report = reportService.generateDeletedJobsReport(deletedJobs);
+
+            return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=deleted-jobs-report.csv")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(report);
+        } catch (UsernameNotFoundException ex) {
+            
+            return ResponseEntity.status(HttpStatus.SC_FORBIDDEN).body("User not authorized");
+        } catch (Exception e) {
+           
+            return ResponseEntity.status(HttpStatus.SC_INTERNAL_SERVER_ERROR).body("Failed to export deleted jobs report");
+        }
+    }
+
+    
 
 }

@@ -37,7 +37,7 @@ public class EmailNotificationService implements NotificationService {
     }
 
     @Override
-    public void sendPushNotification(String recipientId, String title, String message) {
+    public void sendPushNotification(Long recipientId, String title, String message) {
         throw new UnsupportedOperationException("Push notifications are not supported by EmailNotificationService.");
     }
 

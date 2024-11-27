@@ -436,39 +436,51 @@ public class PrintJobService {
 	    String message = "Job ID " + jobId + " status has been updated to " + status;
 
 	    // Notify job owner
-	    String userEmail = printJob.getUser().getEmail();
-	    if (userEmail == null) {
-	        throw new IllegalStateException("Job owner email not found for Job ID: " + jobId);
+	    if (printJob.getUser() == null || printJob.getUser().getId() == null) {
+	        throw new IllegalStateException("Job owner ID not found for Job ID: " + jobId);
 	    }
-	    sendNotification("Job Status Updated", message, userEmail);
+	    Long userId = printJob.getUser().getId();
+	    sendNotification("Job Status Updated", message, userId);
 
 	    // Notify admins
-	    List<String> adminEmails = getAdminEmails();
-	    adminEmails.forEach(adminEmail -> sendNotification("Job Status Updated", message, adminEmail));
+	    List<Long> adminIds = getAdminIds(); // Ensure this method retrieves admin IDs as Long
+	    if (adminIds != null && !adminIds.isEmpty()) {
+	        adminIds.forEach(adminId -> sendNotification("Job Status Updated", message, adminId));
+	    }
 
 	    // Log notifications
-	    logNotification(userEmail, message);
-	    adminEmails.forEach(adminEmail -> logNotification(adminEmail, message));
+	    logNotification(userId.toString(), message);
+	    if (adminIds != null) {
+	        adminIds.forEach(adminId -> logNotification(adminId.toString(), message));
+	    }
+	}
+	
+	
+	private List<Long> getAdminIds() {
+	    return userService.getUsersByRole("ROLE_ADMIN") // Fetch users with the "ROLE_ADMIN" role
+	        .stream()
+	        .map(User::getId) // Replace `User` with your actual user entity class
+	        .collect(Collectors.toList()); // Collect the IDs into a list
 	}
 
 
 
 
-	private void sendNotification(String subject, String message, String recipient) {
-	    // Check recipient type and preferences before sending notifications
+
+	private void sendNotification(String subject, String message, Long recipientId) {
+	    // Retrieve notification preferences for the recipient
 	    UserNotificationPreferences preferences = userNotificationPreferencesService
-	            .findByUserEmail(recipient)
-	            .orElseThrow(() -> new ResourceNotFoundException("User notification preferences not found for: " + recipient));
+	            .findByUserId(recipientId) // Assuming this method finds preferences by userId (Long)
+	            .orElseThrow(() -> new ResourceNotFoundException("User notification preferences not found for user ID: " + recipientId));
 
 	    // Send email notification if the user prefers email
 	    if (preferences.isPreferEmail()) {
-	    	emailNotificationService.sendEmailNotification(recipient, subject, message);
+	        emailNotificationService.sendEmailNotification(preferences.getUser().getEmail(), subject, message);
 	    }
 
 	    // Send push notification if the user prefers in-app notifications
 	    if (preferences.isPreferInApp()) {
-	        String userId = preferences.getUser().getId().toString(); // Fetch the user's ID
-	        pushNotificationService.sendPushNotification(userId, subject, message);
+	        pushNotificationService.sendPushNotification(recipientId, subject, message);
 	    }
 	}
 
@@ -487,7 +499,9 @@ public class PrintJobService {
 	        .map(User::getEmail) // Replace `User` with your actual user entity class
 	        .collect(Collectors.toList());
 	}
-
+	
+	
+	
 
 	// This method logs the notification (for auditing purposes)
 	private void logNotification(String recipient, String message) {

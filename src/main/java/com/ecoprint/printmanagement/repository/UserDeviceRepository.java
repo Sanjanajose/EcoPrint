@@ -35,7 +35,8 @@ public interface UserDeviceRepository extends JpaRepository<UserDevice, Long> {
     
     
     
-    Optional<UserDevice> findByUserId(Long userId);
+    List<UserDevice> findByUserId(Long userId);
+
 
         @Query("SELECT ud.notificationToken FROM USER_DEVICE ud WHERE ud.user.id = :userId")
         Optional<String> findDeviceTokenByUserId(@Param("userId") long userId);

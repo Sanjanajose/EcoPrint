@@ -513,7 +513,11 @@ public class UserService {
  
 
 
-	
+	public Long findUserIdByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(User::getId)
+                .orElse(null); // Return null if user not found
+    }
 	
 	
 	public String getDeviceTokenByUserId(long userId) {
