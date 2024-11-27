@@ -13,7 +13,6 @@
  */
 package com.ecoprint.printmanagement.service;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -38,7 +37,6 @@ import com.ecoprint.printmanagement.repository.RoleChangeLogRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 
-import io.jsonwebtoken.lang.Arrays;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 
@@ -245,17 +243,8 @@ public class RoleService {
         log.setTimestamp(new Date());
         roleChangeLogRepository.save(log);
     }
-    
-    public List<String> getAllRoles() {
-        List<String> roles = new ArrayList<>();
-        for (RoleName roleName : RoleName.values()) {
-            roles.add(roleName.name());
-        }
-        return roles;
-    }
 
     
-
     public Set<RoleName> getRolesByUserId(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
@@ -263,7 +252,6 @@ public class RoleService {
                 .map(Role::getRole)
                 .collect(Collectors.toSet());
     }
-
 
 
 }

@@ -20,12 +20,10 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.ecoprint.printmanagement.dto.AdminDTO;
 import com.ecoprint.printmanagement.event.OnUserAccountChangeEvent;
 import com.ecoprint.printmanagement.exception.FileUploadException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.ActivityLog;
-import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
@@ -59,7 +57,7 @@ public class AdminController {
         this.applicationEventPublisher = applicationEventPublisher;
     }
 
-   /* @GetMapping
+    @GetMapping
     @Operation(summary = "Fetch a paginated list of all users.")
     public ResponseEntity<Page<User>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,  // Page number (default: 0)
@@ -67,37 +65,9 @@ public class AdminController {
     ) {
         Page<User> users = adminService.getAllUsers(page, size);
         return ResponseEntity.ok(users); // Return paginated user data
-    } */
-    
-    @GetMapping
-    @Operation(summary = "Fetch a paginated list of all users.")
-    public ResponseEntity<Page<AdminDTO>> getAllUsers(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        Page<User> users = adminService.getAllUsers(page, size);
-        Page<AdminDTO> adminDTOs = users.map(this::convertToAdminDTO); // Map entities to DTOs
-        return ResponseEntity.ok(adminDTOs);
     }
 
-    
-    public AdminDTO convertToAdminDTO(User user) {
-        AdminDTO adminDTO = new AdminDTO();
-        adminDTO.setId(user.getId());
-        adminDTO.setUsername(user.getUsername());
-        adminDTO.setEmail(user.getEmail());
-        adminDTO.setPhone(user.getPhone());
-        adminDTO.setAddress(user.getAddress());
-        adminDTO.setGender(user.getGender());
-        adminDTO.setCountry(user.getCountry());
-        adminDTO.setDob(user.getDob());
-        adminDTO.setProfilePicture(user.getProfilePicture()); // URL to profile picture
-        adminDTO.setRoles(user.getRoles().stream().map(Role::getRoleName).collect(Collectors.toSet()));
-        return adminDTO;
-    }
-
-
-   /* @PostMapping("/users")
+    @PostMapping("/users")
     @Operation(summary = "Create a new user with assigned roles")
     public ResponseEntity<?> createUser(
             @Valid RegistrationRequest registrationRequest,
@@ -106,19 +76,7 @@ public class AdminController {
         // Call admin service to create the user with the provided roles
         User newUser = adminService.createUser(registrationRequest, roles);
         return ResponseEntity.ok(new ApiResponse(true, "User created successfully."));
-    }*/
-    
-    @PostMapping("/users")
-    @Operation(summary = "Create a new user with assigned roles")
-    public ResponseEntity<?> createUser(
-            @Valid @RequestBody RegistrationRequest registrationRequest, // Mark as @RequestBody
-            @RequestParam Set<String> roles) { // Accept roles as a request parameter
-
-        // Call admin service to create the user with the provided roles
-        User newUser = adminService.createUser(registrationRequest, roles);
-        return ResponseEntity.ok(new ApiResponse(true, "User created successfully."));
     }
-
 
     @PutMapping("/users/{id}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPERADMIN')")

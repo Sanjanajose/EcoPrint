@@ -44,10 +44,8 @@ import com.ecoprint.printmanagement.exception.TokenRefreshException;
 import com.ecoprint.printmanagement.exception.UserLoginException;
 import com.ecoprint.printmanagement.exception.UserRegistrationException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
-import com.ecoprint.printmanagement.model.DeviceType;
 import com.ecoprint.printmanagement.model.LoginRequest2FA;
 import com.ecoprint.printmanagement.model.User;
-import com.ecoprint.printmanagement.model.UserDevice;
 import com.ecoprint.printmanagement.model.payload.ApiResponse;
 import com.ecoprint.printmanagement.model.payload.JwtAuthenticationResponse;
 import com.ecoprint.printmanagement.model.payload.LoginRequest;
@@ -62,14 +60,12 @@ import com.ecoprint.printmanagement.service.AuthService;
 import com.ecoprint.printmanagement.service.MailService;
 import com.ecoprint.printmanagement.service.OTPService;
 import com.ecoprint.printmanagement.service.UserActivityService;
-import com.ecoprint.printmanagement.service.UserDeviceService;
 import com.ecoprint.printmanagement.service.UserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-import ch.qos.logback.classic.Logger;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -84,9 +80,6 @@ public class AuthController {
     private final JwtTokenProvider tokenProvider;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final UserService userService; 
-    private final UserDeviceService userDeviceService; 
-    
-    
     
 
     @Autowired
@@ -99,16 +92,14 @@ public class AuthController {
     private OTPService otpService;
 
 
-    
+
     @Autowired
     public AuthController(AuthService authService, JwtTokenProvider tokenProvider, 
-                          ApplicationEventPublisher applicationEventPublisher, UserService userService,UserDeviceService userDeviceService) {
+                          ApplicationEventPublisher applicationEventPublisher, UserService userService) {
         this.authService = authService;
         this.tokenProvider = tokenProvider;
         this.applicationEventPublisher = applicationEventPublisher;
         this.userService = userService;
-        this.userDeviceService = userDeviceService;
-      
     }
 
     @Operation(summary = "Checks if the given email is in use")
@@ -147,8 +138,6 @@ public class AuthController {
     		@Valid @RequestParam("registrationRequest") String registrationRequest,
     		@RequestParam("profilePic") @io.swagger.v3.oas.annotations.media.Schema(description = "Profile picture to upload", type = "string", format = "binary") MultipartFile profilePic
     		) throws JsonMappingException, JsonProcessingException {
-    	
-    	
     	ObjectMapper objectMapper = new ObjectMapper();
     	objectMapper.registerModule(new JavaTimeModule());
     	RegistrationRequest request = objectMapper.readValue(registrationRequest, RegistrationRequest.class);
@@ -183,69 +172,53 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(summary = "Logs the user into the system and returns the auth tokens, with optional two-factor authentication (2FA) if enabled.")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        // Step 1: Authenticate the user credentials
+        // Step 1: Authenticate the user
         User user = authService.validateUserCredentials(loginRequest.getIdentifier(), loginRequest.getPassword());
         CustomUserDetails customUserDetails = new CustomUserDetails(user); // Assuming you have a constructor for this
         Authentication authentication = new UsernamePasswordAuthenticationToken(customUserDetails, null, customUserDetails.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // Step 2: Handle device registration or retrieval
-        String deviceId = loginRequest.getDeviceInfo().getDeviceId();
-        DeviceType deviceType = loginRequest.getDeviceInfo().getDeviceType();
-        String notificationToken = loginRequest.getDeviceInfo().getNotificationToken();
-
-        UserDevice userDevice = new UserDevice();
-        // Check or register the device
-        //String finalDeviceId = userDeviceService.registerOrRetrieveDevice(user.getId(), deviceId, deviceType, notificationToken);
-        String finalDeviceId = userDevice.getDeviceId();
         // Log the login activity
-        userActivityService.logUserActivity(user.getId(), "LOGIN", "User logged in from device: " + finalDeviceId);
+        Long userId = user.getId();
+        userActivityService.logUserActivity(userId, "LOGIN", "User logged in");
 
-        // Step 3: Handle Two-Factor Authentication (2FA) if enabled
         if (user.isTwoFactorEnabled()) {
+            // Step 2: Handle 2FA
             if (loginRequest.getOtp() != null) {
-                boolean isValidOtp = otpService.validateOTP(user.getId(), loginRequest.getOtp());
+                boolean isValidOtp = otpService.validateOTP(userId, loginRequest.getOtp());
                 if (isValidOtp) {
                     // OTP is valid, proceed with generating tokens
-                    return generateTokensWithDevice(authentication, loginRequest, finalDeviceId);
+                    return generateTokens(authentication, loginRequest);
                 } else {
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                             .body("Invalid or expired OTP. Please try again.");
                 }
             } else {
                 // Generate and send OTP if it’s not provided
-                String otp = otpService.generateAndSaveOTP(user.getId());
+                String otp = otpService.generateAndSaveOTP(userId);
                 if ("email".equalsIgnoreCase(user.getPreferred2FAMethod())) {
                     mailService.sendOTPEmail(user.getEmail(), otp);
-                }
+                } 
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body("OTP sent. Please enter the OTP to complete login.");
+                        .body("OTP sent. Please enter thRe OTP to complete login.");
             }
         }
 
-        // Step 4: Normal login flow if 2FA is not enabled
-        return generateTokensWithDevice(authentication, loginRequest, finalDeviceId);
-    }
-
-    /**
-     * Helper method to generate tokens while incorporating the deviceId.
-     */
-    private ResponseEntity<?> generateTokensWithDevice(Authentication authentication, LoginRequest loginRequest, String deviceId) {
+        // Step 3: Normal login flow if 2FA is not enabled
         return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
                 .map(RefreshToken::getToken)
                 .map(refreshToken -> {
-                    String jwtToken = authService.generateToken((CustomUserDetails) authentication.getPrincipal());
-                    return ResponseEntity.ok(new JwtAuthenticationResponse(jwtToken, refreshToken, tokenProvider.getExpiryDuration(), deviceId));
+                    String jwtToken = authService.generateToken(customUserDetails);
+                    return ResponseEntity.ok(new JwtAuthenticationResponse(jwtToken, refreshToken, tokenProvider.getExpiryDuration()));
                 })
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
-
 
     
     
 
     // Helper method to generate JWT and refresh tokens
-   /* private ResponseEntity<JwtAuthenticationResponse> generateTokens(Authentication authentication, LoginRequest loginRequest) {
+    private ResponseEntity<JwtAuthenticationResponse> generateTokens(Authentication authentication, LoginRequest loginRequest) {
         // Generate JWT token and refresh token
         return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
                 .map(RefreshToken::getToken)
@@ -255,26 +228,9 @@ public class AuthController {
                 })
                 .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
     }
-*/
 
 
- // Helper method to generate JWT and refresh tokens
-    private ResponseEntity<JwtAuthenticationResponse> generateTokens(Authentication authentication, LoginRequest loginRequest) {
-        // Generate JWT token and refresh token
-        return authService.createAndPersistRefreshTokenForDevice(authentication, loginRequest)
-                .map(RefreshToken::getToken)
-                .map(refreshToken -> {
-                    String jwtToken = authService.generateToken((CustomUserDetails) authentication.getPrincipal());
-                    String deviceId = loginRequest.getDeviceInfo().getDeviceId(); // Get deviceId from DeviceInfo
-                    return ResponseEntity.ok(new JwtAuthenticationResponse(
-                            jwtToken,
-                            refreshToken,
-                            tokenProvider.getExpiryDuration(),
-                            deviceId
-                    ));
-                })
-                .orElseThrow(() -> new UserLoginException("Couldn't create refresh token for: [" + loginRequest + "]"));
-    }
+
 
         
     
@@ -344,29 +300,17 @@ public class AuthController {
      * and return a new token to the caller
      */
     @PostMapping("/refresh")
-    @Operation(summary = "Refresh the expired jwt authentication by issuing a token refresh request and return a new token to the caller")
-    public ResponseEntity<?> refreshToken(@Valid @RequestBody TokenRefreshRequest tokenRefreshRequest) {
+    @Operation(summary = "Refresh the expired jwt authentication by issuing a token refresh request and returns the" +
+            "updated response tokens")
+    public ResponseEntity refreshJwtToken(@Param(value = "The TokenRefreshRequest payload") @Valid @RequestBody TokenRefreshRequest tokenRefreshRequest) {
+
         return authService.refreshJwtToken(tokenRefreshRequest)
                 .map(updatedToken -> {
-                    RefreshToken refreshToken = authService.getRefreshToken(tokenRefreshRequest.getRefreshToken());
-                    Long expiryDuration = tokenProvider.getExpiryDuration(); // Ensure this method exists
-
-                    // Correct JwtAuthenticationResponse constructor usage
-                    JwtAuthenticationResponse response = new JwtAuthenticationResponse(
-                            updatedToken, 
-                            refreshToken.getToken(), 
-                            expiryDuration, 
-                            refreshToken.getUserDevice().getDeviceId() // Add deviceId if required
-                    );
-
-                    
-                    return ResponseEntity.ok(response);
+                    String refreshToken = tokenRefreshRequest.getRefreshToken();
+//                    logger.info("Created new Jwt Auth token: " + updatedToken);
+                    return ResponseEntity.ok(new JwtAuthenticationResponse(updatedToken, refreshToken, tokenProvider.getExpiryDuration()));
                 })
-                .orElseThrow(() -> new TokenRefreshException(
-                        tokenRefreshRequest.getRefreshToken(),
-                        "Unexpected error during token refresh. Please log in again."
-                ));
+                .orElseThrow(() -> new TokenRefreshException(tokenRefreshRequest.getRefreshToken(), "Unexpected error during token refresh. Please logout and login again."));
     }
-
 }
 

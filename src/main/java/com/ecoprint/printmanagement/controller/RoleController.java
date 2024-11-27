@@ -5,12 +5,7 @@ import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.service.RoleService;
-
-import java.util.List; 
-
-
 import com.ecoprint.printmanagement.service.UserService;
-
 
 import io.swagger.v3.oas.annotations.Operation;
 
@@ -20,12 +15,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-
-import java.util.*;
-
 import java.util.Set;
 import java.util.stream.Collectors;
-
 
 @RestController
 @RequestMapping("/api/admin/roles")
@@ -130,11 +121,4 @@ public class RoleController {
     }
 
 
-    @Operation(summary = "Fetch all available roles")
-    @GetMapping("/roles/all")
-    public ResponseEntity<List<String>> getAllRoles() {
-        List<String> roles = roleService.getAllRoles();
-        return ResponseEntity.ok(roles);
-    }
-    
 }

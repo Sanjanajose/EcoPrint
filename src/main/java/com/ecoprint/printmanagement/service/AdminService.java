@@ -6,7 +6,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.exception.ResourceAlreadyInUseException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException; // Make sure to import this exception
@@ -32,9 +31,6 @@ import org.springframework.data.domain.Pageable;
 
 @Service
 public class AdminService {
-	
-	 @Autowired
-	    private FileStorageService fileStorageService;
     
     @Autowired
     private UserRepository userRepository;
@@ -63,7 +59,8 @@ public class AdminService {
         Pageable pageable = PageRequest.of(page, size);
         return userRepository.findAllWithBackupCodes(pageable);
     }
-    
+
+
     
  // Create a new user based on the provided registration request.
     public User createUser(RegistrationRequest request, Set<String> roleNames) {
@@ -71,29 +68,30 @@ public class AdminService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ResourceAlreadyInUseException("Email", "Address", request.getEmail());
         }
- 
+
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
- 
+
         // Convert Set<String> roleNames to Set<RoleName>
         Set<RoleName> roleEnums = roleNames.stream()
                 .map(RoleName::valueOf) // Convert each string to RoleName enum
                 .collect(Collectors.toSet());
- 
+
         // Assign roles provided by the admin
         Set<Role> roles = getRolesForUser(roleEnums);
         user.setRoles(roles);
- 
+
         return userRepository.save(user);
     }
-
 
     private Set<Role> getRolesForUser(Set<RoleName> roleNames) {
         return roleNames.stream()
                 .map(roleService::getRoleByName) // Assuming this returns Role
                 .collect(Collectors.toSet());
     }
+
+
     
     public User assignRoles(Long userId, RoleAssignmentRequest request) {
         User user = userRepository.findById(userId)

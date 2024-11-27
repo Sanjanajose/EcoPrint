@@ -29,8 +29,7 @@ public class UserDeviceController {
             @RequestParam String deviceId,
             @RequestParam DeviceType deviceType,
             @RequestParam(required = false) String notificationToken) {
-    	UserDevice device = userDeviceService.registerOrRetrieveDevice(userId, deviceId, deviceType, notificationToken);
-
+        UserDevice device = userDeviceService.registerOrUpdateDevice(userId, deviceId, deviceType, notificationToken);
         return ResponseEntity.ok(device);
     }
 

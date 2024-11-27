@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import javax.crypto.KeyGenerator;
@@ -39,7 +38,6 @@ import com.ecoprint.printmanagement.repository.JwtKeyRepository;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.io.DecodingException;
 import io.jsonwebtoken.security.Keys;
@@ -57,9 +55,6 @@ public class JwtTokenProvider {
 
     @Value("${jwt.rememberMeExpirationMs}")
     private long rememberMeExpirationInMs;
-   
-    @Value("${app.jwt.secret}") 
-    private String jwtSecret1;
 
     public JwtTokenProvider(@Value("${app.jwt.secret}") String jwtSecret) {
         // Constructor kept for potential future use or adjustments.
@@ -87,20 +82,6 @@ public class JwtTokenProvider {
         return rememberMeExpirationInMs;
     }
     
-    
-    public String createToken(String username, Map<String, Object> claims) {
-    	
-    	
-        long now = System.currentTimeMillis();
-        return Jwts.builder()
-                .setClaims(claims) // Add custom claims
-                .setSubject(username)
-                .setIssuedAt(new Date(now))
-                .setExpiration(new Date(now + jwtExpirationInMs))
-                .signWith(SignatureAlgorithm.HS512, jwtSecret1)
-                .compact();
-    }
-
     
 
 

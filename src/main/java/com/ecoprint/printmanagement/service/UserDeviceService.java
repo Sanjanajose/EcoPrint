@@ -14,7 +14,8 @@
 package com.ecoprint.printmanagement.service;
 
 import java.util.Optional;
-import java.util.UUID;
+
+
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import com.ecoprint.printmanagement.model.token.RefreshToken;
 import com.ecoprint.printmanagement.repository.UserDeviceRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import java.util.List;
+
 
 
 @Service
@@ -87,7 +89,7 @@ public class UserDeviceService {
          * Creates a new user device and sets the user to the current device.
          * If the device already exists, updates its details.
          */
-        public UserDevice registerOrRetrieveDevice(Long userId, String deviceId, DeviceType deviceType, String notificationToken) {
+    public UserDevice registerOrUpdateDevice(Long userId, String deviceId, DeviceType deviceType, String notificationToken) {
         // Check if the specific device already exists for the user
         Optional<UserDevice> existingDevice = userDeviceRepository.findByUserIdAndDeviceId(userId, deviceId);
 
@@ -95,8 +97,8 @@ public class UserDeviceService {
         if (existingDevice.isPresent()) {
             // Update the existing device record
             userDevice = existingDevice.get();
-            if (deviceType != null) userDevice.setDeviceType(deviceType);
-            if (notificationToken != null) userDevice.setNotificationToken(notificationToken);
+            userDevice.setDeviceType(deviceType);
+            userDevice.setNotificationToken(notificationToken);
         } else {
             // Create a new device entry
             userDevice = new UserDevice();
@@ -110,10 +112,8 @@ public class UserDeviceService {
 
         return userDeviceRepository.save(userDevice);
     }
-        
-        
-        
-       
+
+
 
         /**
          * Check whether the user device corresponding to the token has refresh enabled and
