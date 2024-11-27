@@ -33,6 +33,14 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
     // Find PrintJob by file name
     Optional<PrintJob> findByFileName(String fileName);
     
+
+    List<PrintJob> findByStatus(PrintJobStatus status);
+    
+    int countByStatusAndIdLessThan(PrintJobStatus status, Long id);
+
+
+
+
     
     // Query by user entity
     List<PrintJob> findByUser(User user);
@@ -43,6 +51,7 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
     
     @Query("SELECT p FROM PrintJob p WHERE p.user.id = :userId ORDER BY p.status ASC, p.priority ASC")
     List<PrintJob> findByUserIdOrderByStatusAscPriorityAsc(@Param("userId") Long userId);
+
 
     
     List<PrintJob> findByUserAndFavoriteTrue(User user);

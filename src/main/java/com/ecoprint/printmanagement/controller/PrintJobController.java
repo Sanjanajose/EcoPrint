@@ -45,7 +45,11 @@ import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+
+import com.ecoprint.printmanagement.response.ReadyJobResponse;
+
 import com.ecoprint.printmanagement.service.AuthService;
+
 import com.ecoprint.printmanagement.service.NotificationService;
 import com.ecoprint.printmanagement.service.PrintJobService;
 
@@ -110,8 +114,8 @@ public class PrintJobController {
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "pagesPrinted", required = true) int pagesPrinted) {
         try {
-            double cost = pagesPrinted * COST_PER_PAGE;
-            printJobService.uploadFile(file, userName, description, pagesPrinted, cost);
+           
+            printJobService.uploadFile(file, userName, description, pagesPrinted);
             return ResponseEntity.status(HttpStatus.CREATED).body("File uploaded successfully and job submitted");
         } catch (IOException e) {
             logger.error("IOException during file upload", e);
@@ -407,6 +411,26 @@ public class PrintJobController {
         return ResponseEntity.ok("Print job reordered");
     }
 
+
+   
+    @GetMapping("/ready-jobs")
+    @Operation(summary = "Get Ready Jobs",
+               description = "Retrieve a list of jobs that are ready to print with estimated wait times.")
+    public ResponseEntity<List<ReadyJobResponse>> getReadyJobs() {
+        List<ReadyJobResponse> readyJobs = printJobService.getReadyJobs();
+        return ResponseEntity.ok(readyJobs);
+    }
+
+ /*
+
+    @PostMapping("/retry-failed-jobs/{jobId}")
+
+    public ResponseEntity<String> retryFailedJobById(@PathVariable Long jobId) {
+
+    	boolean retrySuccess = printJobService.retryFailedJobById(jobId);
+
+    
+
     @PutMapping("/{jobId}/favorite")
     @PreAuthorize("hasRole('ADMIN') or @printJobService.isOwner(#jobId, authentication.name)")
     public ResponseEntity<?> markAsFavorite(@PathVariable Long jobId) {
@@ -445,4 +469,18 @@ public class PrintJobController {
 
 
 
+    if (retrySuccess) {
+
+        return ResponseEntity.ok("Retry process triggered for job ID: " + jobId);
+
+    } else {
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job ID " + jobId + " not found or not eligible for retry.");
+
+    }
+
+    }
+  
+
+*/
 }

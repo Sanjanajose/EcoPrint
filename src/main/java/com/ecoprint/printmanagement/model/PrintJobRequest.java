@@ -3,6 +3,8 @@ package com.ecoprint.printmanagement.model;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+
 
 public class PrintJobRequest  {
 
@@ -21,6 +23,26 @@ public class PrintJobRequest  {
     @JsonProperty("priority")
     private Priority priority;  // Priority field
     
+    
+    //@NotNull(message = "Submitter ID is required.")
+    //private Long submitterId;
+
+    @NotNull(message = "Color is required.")
+    private Boolean color; // Indicates whether the print is color or black & white
+
+    @NotNull(message = "Duplex is required.")
+    private Boolean duplex; // Indicates whether the print is duplex or single-sided
+
+
+    @NotEmpty(message = "Paper type must not be empty")
+    private String paper; // Paper type (e.g., A4, A3, Letter)
+
+
+
+    @NotEmpty(message = "Size must not be empty")
+    private String size; // Paper size (e.g., small, medium, large)
+
+
  // No-args constructor
     public PrintJobRequest() {
     }

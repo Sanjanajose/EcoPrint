@@ -1,6 +1,7 @@
 package com.ecoprint.printmanagement.service;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,7 +16,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.beans.factory.annotation.Qualifier;
+
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -24,10 +29,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ecoprint.printmanagement.exception.NetworkException;
+import com.ecoprint.printmanagement.exception.PrinterException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
+import com.ecoprint.printmanagement.model.FailureReason;
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.NotificationLog;
 import com.ecoprint.printmanagement.model.PrintHistoryDTO;
@@ -39,16 +48,32 @@ import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.Priority;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
+import com.ecoprint.printmanagement.model.SubmittedJobs;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserNotificationPreferences;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
+import com.ecoprint.printmanagement.repository.SubmitJobRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
+import com.ecoprint.printmanagement.response.ReadyJobResponse;
+import com.google.api.client.util.Objects;
 
 @Service
 public class PrintJobService {
+
+    @Value("${retry.maxRetryCount:3}")
+    private int maxRetryCount;
+
+    @Value("${retry.interval.network:PT1M}") // Default 1 minute for network issues
+    private String retryNetworkInterval;
+
+    @Value("${retry.interval.printer:PT5M}") // Default 5 minutes for printer issues
+    private String retryPrinterInterval;
+
+    @Value("${retry.interval.default:PT2M}") // Default interval for other cases
+    private String defaultRetryInterval;
 
 	private static final Logger logger = LoggerFactory.getLogger(PrintJobService.class);
 	private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -57,6 +82,8 @@ public class PrintJobService {
 	private final JobHistoryRepository jobHistoryRepository;
 
 	private final UserRepository userrepository;
+
+    private final SubmitJobRepository submitJobRepository;
 
 	@Autowired
 	private NotificationLogRepository notificationLogRepository;
@@ -92,19 +119,24 @@ public class PrintJobService {
 
 	private final Tika tika = new Tika();
 
-	public PrintJobService(PrintJobRepository printJobRepository, JobHistoryRepository jobHistoryRepository,
-			UserRepository userrepository, SimpMessagingTemplate messagingTemplate, @Qualifier("emailNotificationService") NotificationService emailNotificationService,  @Qualifier("pushNotificationService") NotificationService pushNotificationService) {
-		this.printJobRepository = printJobRepository;
-		this.jobHistoryRepository = jobHistoryRepository;
-		this.userrepository = userrepository;
-		this.messagingTemplate = messagingTemplate;
-		this.emailNotificationService = emailNotificationService;
-		this.pushNotificationService = pushNotificationService;
-
-	}
+	public PrintJobService(PrintJobRepository printJobRepository, 
+            JobHistoryRepository jobHistoryRepository,
+            UserRepository userrepository, 
+            SubmitJobRepository submitJobRepository,
+            SimpMessagingTemplate messagingTemplate, 
+            @Qualifier("emailNotificationService") NotificationService emailNotificationService,  
+            @Qualifier("pushNotificationService") NotificationService pushNotificationService) {
+this.printJobRepository = printJobRepository;
+this.jobHistoryRepository = jobHistoryRepository;
+this.userrepository = userrepository;
+this.submitJobRepository = submitJobRepository;
+this.messagingTemplate = messagingTemplate;
+this.emailNotificationService = emailNotificationService;
+this.pushNotificationService = pushNotificationService;
+}
 
 	// Method to upload file and create a new job
-	@Transactional
+	//@Transactional
 	// Method to upload file and create a new job
 	/**
 	 * public void uploadFile(MultipartFile file, String userName, String
@@ -140,27 +172,46 @@ public class PrintJobService {
 	 **/
 
 	// Method to upload file and create a new job
-	public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted, double cost)
-			throws IOException {
-		if (file == null || file.isEmpty()) {
-			throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
-		}
-		if (file.getSize() > MAX_FILE_SIZE) {
-			throw new IllegalArgumentException(
-					"File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
-		}
+    @Transactional
+    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
+        }
 
-		String fileType = tika.detect(file.getInputStream());
-		validateFileType(fileType);
+        String fileType = tika.detect(file.getInputStream());
+        validateFileType(fileType);
 
-		// Retrieve the User entity based on userName
-		User user = userrepository.findByUsername(userName)
-				.orElseThrow(() -> new ResourceNotFoundException("User", "username", userName));
+        // Retrieve the User entity based on userName
+        User user = userrepository.findByUsername(userName)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", userName));
 
-		byte[] fileData = file.getBytes();
+        if (!userrepository.existsById(user.getId())) {
+            throw new IllegalArgumentException("User does not exist");
+        }
+        
 
-		String fileName = file.getOriginalFilename(); // Extract file name
 
+        byte[] fileData = file.getBytes();
+        
+        String fileName = file.getOriginalFilename(); // Extract file name        
+        SubmittedJobs submittedJob  = new SubmittedJobs();
+        submittedJob.setFileName(file.getOriginalFilename());
+        submittedJob.setFileType(fileType);
+        submittedJob.setFileSize(file.getSize());
+        submittedJob.setUser(user); // Set the User entity
+        submittedJob.setUserName(user.getUsername()); // Populate the userName field
+        submittedJob.setUploadTimestamp(LocalDateTime.now());
+        submittedJob.setFileData(fileData);
+        submittedJob.setDescription(description);
+        submittedJob.setStatus(PrintJobStatus.SUBMITTED);
+        submittedJob.setPagesPrinted(pagesPrinted);
+        Assert.notNull(submittedJob.getFileName(), "File name must not be null");
+        Assert.notNull(submittedJob.getStatus(), "Job status must not be null");
+        submitJobRepository.save(submittedJob);
+        Long currentUserId = getCurrentUserId();
 		PrintJob printJob = new PrintJob();
 		printJob.setFileName(fileName); // Set file name
 		printJob.setFileType(fileType); // Set file type
@@ -171,14 +222,10 @@ public class PrintJobService {
 		printJob.setFileData(fileData); // Set the file data
 		printJob.setDescription(description); // Set description
 		printJob.setPagesPrinted(pagesPrinted); // Set pages printed
-		printJob.setCost(cost); // Set cost
+		//printJob.setCost(cost); // Set cost
 		printJob.setStatus(PrintJobStatus.SUBMITTED); // Set job status as SUBMITTED
 		printJob.setSubmittedAt(LocalDateTime.now()); // Set submission timestamp
 		printJobRepository.save(printJob);
-
-		// Retrieve current user ID for logging
-		Long currentUserId = getCurrentUserId();
-
 		// Log job submission
 
 		// Step 8: Log the job submission action
@@ -195,7 +242,8 @@ public class PrintJobService {
 				Optional.of(file.getSize()) // File size (passed as Optional)
 		);
 
-	}
+
+    }
 
 	// Method to validate file type
 	private void validateFileType(String fileType) {
@@ -867,7 +915,8 @@ public class PrintJobService {
 		job.setFileName(jobRequest.getFileName()); // Reusing the uploaded file name
 		job.setPagesPrinted(jobRequest.getPages()); // Set pages from jobRequest
 		job.setFileData(existingJob.getFileData()); // Re-use the existing file data from previously uploaded job
-
+job.setFileType(existingJob.getFileType());
+job.setUploadTimestamp(LocalDateTime.now());
 		// Save the new job to the database
 		printJobRepository.save(job);
 
@@ -1129,7 +1178,114 @@ public class PrintJobService {
 		return printHistoryMap;
 	}
 	
+
+	public List<ReadyJobResponse> getReadyJobs() {
+	    // Fetch the list of print jobs with status READY
+	    List<PrintJob> printJobs = printJobRepository.findByStatus(PrintJobStatus.READY);
+
+	    // Map each PrintJob entity to a PrintJobResponse DTO
+	    return printJobs.stream().map(job -> {
+	    	ReadyJobResponse response = new ReadyJobResponse();
+	        response.setId(job.getId());
+	        response.setFileName(job.getFileName());
+	        response.setEstimatedWaitTime(calculateEstimatedWaitTime(job)); // Optional: Add logic for wait time
+
+	        // Add logic to handle User entity gracefully
+	        if (job.getUser() != null && job.getUser().getId() != null && job.getUser().getId() > 0) {
+	            response.setUserName(job.getUser().getUsername());
+	        } else {
+	            response.setUserName(null); // Handle missing or invalid User
+	        }
+
+	        return response; // Return the transformed DTO
+	    }).collect(Collectors.toList()); // Collect into a list
+	}
+
 	
+	private int calculateEstimatedWaitTime(PrintJob job) {
+	    int jobsAhead = printJobRepository.countByStatusAndIdLessThan(PrintJobStatus.READY, job.getId());
+	    return jobsAhead * 5; // Each job takes 5 minutes
+	}
+/*
+	   public void handleJobFailure(PrintJob job, FailureReason failureReason) {
+		    // Increment retry count
+		    job.setRetryCount(job.getRetryCount() + 1);
+		    
+		    // Set job status to FAILED if retry limit reached, otherwise RETRYING
+		    if (job.getRetryCount() >= maxRetryCount) {
+		        job.setStatus(PrintJobStatus.FAILED);
+		       // sendAlert(job);  // Optional: Send alert if max retries reached
+		    } else {
+		        job.setStatus(PrintJobStatus.QUEUED);	        
+		        // Set failure reason
+		        job.setFailureReason(failureReason);	        
+		        // Calculate the next retry time based on failure reason
+		        Duration retryInterval;
+		        switch (failureReason) {
+		            case NETWORK_ISSUE:
+		                retryInterval = Duration.parse(retryNetworkInterval);
+		                break;
+		            case PRINTER_ERROR:
+		                retryInterval = Duration.parse(retryPrinterInterval);
+		                break;
+		            default:
+		                retryInterval = Duration.parse(defaultRetryInterval);
+		        }
+		        job.setNextRetryTime(LocalDateTime.now().plus(retryInterval));
+		    }	    
+		    // Save the job's updated state to the database
+		   // jobRepository.save(job);
+		}
+	    
+/*
+	   public void processPrintJob(PrintJob job) {
+		    try {
+		        updateJobStatus(job.getId(), PrintJobStatus.QUEUED, "Print job added to queue");
+		             
+		        if (job.hasNetworkConnectivityIssues()) {
+		            throw new NetworkException("Network connectivity issue detected");
+		        } else if (job.hasPrinterHardwareIssues()) {
+		            throw new PrinterException("Printer hardware issue detected");
+		        }
+
+
+		        // Additional job processing logic
+
+		    } catch (NetworkException e) {
+		        handleJobFailure(job, FailureReason.NETWORK_ISSUE);
+		    } catch (PrinterException e) {
+		        handleJobFailure(job, FailureReason.PRINTER_ERROR);
+		    } catch (Exception e) {
+		        handleJobFailure(job, FailureReason.UNKNOWN_ERROR);
+		    }
+		}
+	   
+	   public boolean retryFailedJobById(Long jobId) {
+		    // Find the job by its ID
+		    Optional<PrintJob> optionalJob = printJobRepository.findById(jobId);
+		    
+		    if (optionalJob.isPresent()) {
+		        PrintJob job = optionalJob.get();
+		        
+		        // Check if the job is in a FAILED state and is eligible for retry
+		        if (job.getStatus() == PrintJobStatus.FAILED && job.getRetryCount() < maxRetryCount) {
+		            // Increment retry count and set status to RETRYING
+		            job.incrementRetryCount();
+		            job.setStatus(PrintJobStatus.QUEUED);
+		            printJobRepository.save(job);         
+		            // Attempt to process the job again
+		            processPrintJob(job);
+		            return true; // Retry was successfully triggered
+		        }
+		    }
+		    
+		    return false; // Job not found or not eligible for retry
+		}
+
+
+	
+*/
+}
 
 	public void markAsFavorite(Long jobId, String username) {
 	    PrintJob job = printJobRepository.findById(jobId)
@@ -1197,3 +1353,4 @@ public class PrintJobService {
 
 
 }
+
