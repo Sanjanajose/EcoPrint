@@ -32,10 +32,7 @@ public class PrintJob {
     private Long id;
 
  
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user", nullable = false)  // The column name is 'user', not 'user_id'
-    private User user;  // The user associated with this print job
- 
+   
 
 
     /*@ManyToOne(fetch = FetchType.EAGER)
@@ -97,7 +94,7 @@ public class PrintJob {
 
 	// Print Details
 
-    private int queuePosition;
+    
     
     @Column(nullable = false)
     private boolean favorite = false;
@@ -164,8 +161,7 @@ public class PrintJob {
  
     // Constructors
 
-    public PrintJob() {}
- 
+    
 
     public PrintJob() {
     	this.priority = Priority.HIGH;

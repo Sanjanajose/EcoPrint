@@ -61,6 +61,7 @@ import org.springframework.data.domain.Page;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.transaction.Transactional;
 import net.coobird.thumbnailator.Thumbnails;
 
 @Service
@@ -201,33 +202,38 @@ public class UserService {
 		}
 	}
 
+	
+	@Transactional
 	public User deleteUserRole(Long userId, String roleName, Authentication authentication) {
-		User user = userRepository.findById(userId)
-				.orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+	    User user = userRepository.findById(userId)
+	            .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-		Role role = roleService.findByName(roleName)
-				.orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
+	    Role role = roleService.findByName(roleName)
+	            .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
 
-		if (!currentUserHasPermissionToAssign(authentication, roleName)) {
-			throw new AccessDeniedException("You don't have permission to remove this role.");
-		}
+	    if (!currentUserHasPermissionToAssign(authentication, roleName)) {
+	        throw new AccessDeniedException("You don't have permission to remove this role.");
+	    }
 
-		// Remove the role and save
-		user.getRoles().remove(role);
-		userRepository.save(user);
+	    // Remove the role
+	    user.getRoles().remove(role);
 
-		// Log role change activity
-		activityLogService.logRoleChange(userId, roleName, "Role removed");
+	    // Save and flush changes
+	    userRepository.saveAndFlush(user);
 
-		// Update permissions
-		// Update permissions with null check on RolePermissionMapping
-		Set<Permission> updatedPermissions = user.getRoles().stream().flatMap(r -> {
-			Set<Permission> permissions = RolePermissionMapping.rolePermissions.get(r.getRole());
-			return permissions != null ? permissions.stream() : Stream.empty();
-		}).collect(Collectors.toSet());
+	    // Clear the persistence context
+	    entityManager.clear();
 
-		return userRepository.save(user);
+	    // Log role change activity
+	    activityLogService.logRoleChange(userId, roleName, "Role removed");
+
+	    return user;
 	}
+	
+	
+	
+
+
 
 	private Set<Role> getRolesForNewUser(Boolean isAdmin) {
 		Set<Role> roles = new HashSet<>();

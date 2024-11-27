@@ -301,7 +301,7 @@ public class UserController {
 
     
     
-    @PreAuthorize("hasRole('ROLE_SUPERADMIN')")
+    @PreAuthorize("hasRole('ROLE_ADMIN') or hasRole('ROLE_SUPERADMIN')")
     @Operation(summary = "Admins or super admins can delete roles")
     @DeleteMapping("/{userId}/deleteRole")
     public ResponseEntity<ApiResponse> deleteUserRole(

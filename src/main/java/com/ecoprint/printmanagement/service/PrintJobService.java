@@ -531,6 +531,7 @@ this.pushNotificationService = pushNotificationService;
 	        pushNotificationService.sendPushNotification(recipientId, subject, message);
 	    }
 	}
+	
 
 
 	private boolean isStatusAllowedForUser(PrintJobStatus status) {
@@ -1285,7 +1286,7 @@ job.setUploadTimestamp(LocalDateTime.now());
 
 	
 */
-}
+
 
 	public void markAsFavorite(Long jobId, String username) {
 	    PrintJob job = printJobRepository.findById(jobId)
@@ -1350,6 +1351,8 @@ job.setUploadTimestamp(LocalDateTime.now());
 	    jobs.forEach(job -> Hibernate.initialize(job.getUser()));
 	    return jobs;
 	}
+
+
 
 
 }
