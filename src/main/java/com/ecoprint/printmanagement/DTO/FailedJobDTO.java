@@ -24,7 +24,8 @@ public class FailedJobDTO {
     private Long oldPrinterId;
     
     
-
+    public FailedJobDTO() {
+    }
 
 
     

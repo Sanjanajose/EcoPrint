@@ -42,14 +42,21 @@ public class FailedJob {
     private PrintJob printJob;
 
     
-   
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "old_printer_id")
+     
+    
+    
+    @ManyToOne
+    @JoinColumn(name = "printer_id") // Current printer
     private Printer printer;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "new_printer_id")
-    private Printer newPrinter;
+    @Column(name = "old_printer_id")
+    private Long oldPrinterId;
+
+    @Column(name = "new_printer_id")
+    private Long newPrinterId;
+
+
+    
 
 
 	public Long getId() {
@@ -109,13 +116,6 @@ public class FailedJob {
 		this.printer = printer;
 	}
 
-	public Printer getNewPrinter() {
-		return newPrinter;
-	}
-
-	public void setNewPrinter(Printer newPrinter) {
-		this.newPrinter = newPrinter;
-	}
 
 	public String getFailureReason() {
 		return failureReason;
@@ -123,6 +123,22 @@ public class FailedJob {
 
 	public void setFailureReason(String failureReason) {
 		this.failureReason = failureReason;
+	}
+
+	public Long getOldPrinterId() {
+		return oldPrinterId;
+	}
+
+	public void setOldPrinterId(Long oldPrinterId) {
+		this.oldPrinterId = oldPrinterId;
+	}
+
+	public Long getNewPrinterId() {
+		return newPrinterId;
+	}
+
+	public void setNewPrinterId(Long newPrinterId) {
+		this.newPrinterId = newPrinterId;
 	}
 
 	

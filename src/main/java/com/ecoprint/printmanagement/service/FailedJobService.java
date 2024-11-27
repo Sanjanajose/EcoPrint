@@ -139,14 +139,20 @@ public class FailedJobService {
         FailedJob failedJob = failedJobRepository.findById(jobId)
                 .orElseThrow(() -> new RuntimeException("Failed job not found"));
 
-       Printer newPrinter = printerRepository.findById(newPrinterId)
-                .orElseThrow(() -> new RuntimeException("Printer not found"));
-      
-       
-       failedJob.setPrinter(newPrinter);
-       failedJobRepository.save(failedJob);
+        // Fetch the new printer
+        Printer newPrinter = printerRepository.findById(newPrinterId)
+                .orElseThrow(() -> new RuntimeException("New printer not found"));
 
+        // Ensure the `oldPrinterId` is captured before changing it
+        if (failedJob.getPrinter() != null) {
+            failedJob.setOldPrinterId(failedJob.getPrinter().getId()); // Save old printer ID
+        }
+        
+        // Update to the new printer
+        failedJob.setPrinter(newPrinter); // Set the new printer
+        failedJob.setNewPrinterId(newPrinterId); // Update the new printer ID for tracking
 
+        failedJobRepository.save(failedJob);
     }
     
     public List<FailedJobDTO> getAllFailedJobs() {
@@ -158,8 +164,8 @@ public class FailedJobService {
                         failedJob.getPrinter() != null ? failedJob.getPrinter().getStatus() : null,
                         failedJob.getRetryCount(),
                         failedJob.getPrinter() != null ? failedJob.getPrinter().getName() : null,
-                        failedJob.getPrinter() != null ? failedJob.getPrinter().getId() : null, // oldPrinterId
-                        failedJob.getNewPrinter() != null ? failedJob.getNewPrinter().getId() : null // newPrinterId
+                        failedJob.getOldPrinterId() != null ? failedJob.getOldPrinterId() : null, // oldPrinterId
+                        failedJob.getNewPrinterId() != null ? failedJob.getNewPrinterId() : null // newPrinterId
                 ))
                 .collect(Collectors.toList());
     }
