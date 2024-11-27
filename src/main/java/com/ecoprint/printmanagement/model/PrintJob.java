@@ -106,16 +106,8 @@ public class PrintJob {
     private Integer queuePosition;
 
 
-    private Integer queuePosition;
- 
- 
-    public Integer getQueuePosition() {
-		return queuePosition;
-	}
+    
 
-	public void setQueuePosition(Integer queuePosition) {
-		this.queuePosition = queuePosition;
-	}
 
 	// Print Details
 

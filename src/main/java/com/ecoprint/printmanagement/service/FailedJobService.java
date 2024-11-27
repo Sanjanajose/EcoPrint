@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ecoprint.printmanagement.DTO.FailedJobDTO;
+import com.ecoprint.printmanagement.dto.FailedJobDTO;
 import com.ecoprint.printmanagement.model.FailedJob;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;

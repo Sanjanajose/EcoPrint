@@ -1,4 +1,4 @@
-package com.ecoprint.printmanagement.DTO;
+package com.ecoprint.printmanagement.dto;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;

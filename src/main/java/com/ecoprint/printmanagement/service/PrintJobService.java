@@ -874,7 +874,7 @@ this.pushNotificationService = pushNotificationService;
 		System.out.println("jobId::in findJobIfAuthorized"+jobId);
 	/*PrintJob job = printJobRepository.findById(jobId)
 
-	/*public PrintJob findJobIfAuthorized(Long jobId) {
+	public PrintJob findJobIfAuthorized(Long jobId) {
 		PrintJob job = printJobRepository.findById(jobId)
 				.orElseThrow(() -> new ResourceNotFoundException("Job not found"));
 	
@@ -892,31 +892,10 @@ this.pushNotificationService = pushNotificationService;
 		}
 
 		throw new AccessDeniedException("User is not authorized to manage this job");
-	}*/
-	
-	
-	public PrintJob findJobIfAuthorized(Long jobId) {
-	    logger.info("Fetching print job with ID: {}", jobId);
-
-	    // Attempt to fetch the job
-	    PrintJob job = printJobRepository.findById(jobId)
-	            .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
-
-	    logger.info("Retrieved job: {}", job);
-
-	    Long currentUserId = getCurrentUserId();
-	    boolean isAdmin = hasRole("ROLE_ADMIN");
-
-	    if (isAdmin || (job.getUser() != null && job.getUser().getId().equals(currentUserId))) {
-	        logger.info("Authorized access for job ID: {}", jobId);
-	        return job;
-	    }
-
-	    logger.error("Unauthorized access to job ID: {}", jobId);
-	    throw new AccessDeniedException("User is not authorized to manage this job");
 	}
-
-
+	
+	
+	
 
 
 	/*private Long getCurrentUserId() {
