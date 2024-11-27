@@ -16,9 +16,11 @@ import com.ecoprint.printmanagement.model.FailedJob;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.Printer;
+import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.FailedJobRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.PrinterRepository;
+import com.ecoprint.printmanagement.repository.UserRepository;
 
 @Service
 public class FailedJobService {
@@ -39,6 +41,9 @@ public class FailedJobService {
     @Autowired
     @Qualifier("emailNotificationService")
     private NotificationService notificationService;
+    
+    @Autowired 
+    private UserRepository userRepository;
 
  
     
@@ -75,7 +80,7 @@ public class FailedJobService {
                 .orElseThrow(() -> new RuntimeException("Failed job not found"));
         // Check if retry limit exceeded
         if (failedJob.getRetryCount() >= 3) {
-            sendAlertToAdmin(failedJob);
+            sendAlertToUser(failedJob);
             throw new IllegalStateException("Retry limit exceeded. Manual intervention required.");
         }
         // Retry logic
@@ -94,13 +99,22 @@ public class FailedJobService {
     }
 
     
+  
     
-    private void sendAlertToAdmin(FailedJob failedJob) {
-        String message = "Failed job " + failedJob.getId() + " has exceeded retry limit. Manual intervention required.";
-        String emailRecipient = "sashaprabha16@gmail.com";
-        String subject = "Alert Mail for Failed Job " + failedJob.getId();
-        
-        notificationService.sendEmailNotification(emailRecipient, subject, message);
+    private void sendAlertToUser(FailedJob failedJob) {
+        Long userId = Long.parseLong(failedJob.getFailedBy()); // Assuming `failedBy` stores the user ID as a String
+        Optional<User> userOptional = userRepository.findById(userId);
+
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            String emailRecipient = user.getEmail();
+            String message = "Failed job " + failedJob.getId() + " has exceeded retry limit. Manual intervention required.";
+            String subject = "Alert Mail for Failed Job " + failedJob.getId();
+
+            notificationService.sendEmailNotification(emailRecipient, subject, message);
+        } else {
+            System.err.println("User not found for ID: " + userId);
+        }
     }
 
     
