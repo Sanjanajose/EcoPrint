@@ -166,6 +166,8 @@ public class UserService {
 
 		// Set other user details
 		newUser.setActive(true);
+		newUser.setFirstName(registerRequest.getFirstName());
+	    newUser.setLastName(registerRequest.getLastName());
 		newUser.setEmailVerified(false);
 		newUser.setPhone(registerRequest.getPhone());
 		newUser.setAddress(registerRequest.getAddress());

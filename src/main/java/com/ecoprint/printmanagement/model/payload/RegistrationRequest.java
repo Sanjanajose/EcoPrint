@@ -25,6 +25,16 @@ public class RegistrationRequest {
     @NullOrNotBlank(message = "Registration username can be null but not blank")
     @Schema(name = "A valid username", allowableValues = "NonEmpty String")
     private String username;
+    
+    @NullOrNotBlank(message = "Registration firstname can be null but not blank")
+    @Schema(name = "A valid firstname", allowableValues = "NonEmpty String")
+    private String firstName;
+    
+    @NullOrNotBlank(message = "Registration lastname can be null but not blank")
+    @Schema(name = "A valid lastname", allowableValues = "NonEmpty String")
+    private String lastName;
+    
+
 
     @NullOrNotBlank(message = "Registration email can be null but not blank")
     @Schema(name = "A valid email", required = true, allowableValues = "NonEmpty String")
@@ -67,9 +77,11 @@ public class RegistrationRequest {
     private String preferred2FAMethod;
 
     // Constructors
-    public RegistrationRequest(String username, String email, String password, Boolean registerAsAdmin,
+    public RegistrationRequest(String username,String firstName,String lastName, String email, String password, Boolean registerAsAdmin,
                                String phone, String address, String gender, String country, LocalDate dob, String profilePicture) {
         this.username = username;
+        this.firstName = firstName;
+        this.lastName = lastName;
         this.email = email;
         this.password = password;
         this.registerAsAdmin = registerAsAdmin;
@@ -181,5 +193,21 @@ public class RegistrationRequest {
 		preferred2FAMethod = preferred2faMethod;
 	}
     
+	
+	 public String getFirstName() {
+	        return firstName;
+	    }
+
+	    public void setFirstName(String firstName) {
+	        this.firstName = firstName;
+	    }
+
+	    public String getLastName() {
+	        return lastName;
+	    }
+
+	    public void setLastName(String lastName) {
+	        this.lastName = lastName;
+	    }
     
 }
