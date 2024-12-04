@@ -30,4 +30,11 @@ public interface PrinterRepository  extends JpaRepository<Printer, Long>{
     // Custom query example (if needed)
     // Find printers that are online and located in a specific location
     List<Printer> findByStatusAndLocation(String status, String location);
+    
+    
+    
+    // Custom query to find printer IP by job ID
+  //  @Query("SELECT p.ipAddress FROM PrintJob pj JOIN pj.printer p WHERE pj.id = :jobId")
+   // String getPrinterIpByJobId(@Param("jobId") long jobId);
+
 }

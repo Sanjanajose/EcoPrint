@@ -105,6 +105,14 @@ public class PrintJobManagementController {
         return printJobManagementService.getJobHistory();
     }
 */
+    
+    
+    @PostMapping("/jobs/auto-resume")
+    public String triggerAutoResume() {
+        printJobManagementService.autoResumeJobs();
+        return "Auto-resume process triggered.";
+    }
+
 
 
 }

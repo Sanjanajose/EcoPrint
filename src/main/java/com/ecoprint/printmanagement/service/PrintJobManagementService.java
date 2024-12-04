@@ -119,6 +119,9 @@ public class PrintJobManagementService {
         return jobId;
     }
     
+    
+    
+    
     public Map<String, Object> getJobProgress(long jobId) {
         JobProgress progress = jobProgress.get(jobId);
         if (progress == null) { 
@@ -200,7 +203,20 @@ public class PrintJobManagementService {
     }
 
     
-    
+    public void autoResumeJobs() {
+        activeJobs.forEach((jobId, status) -> {
+            if ("PAUSED".equalsIgnoreCase(status) && printerCommunicator.isPrinterAvailable(jobId)) {
+                try {
+                    resumeJob(jobId);
+                    // Log job resumption
+                    System.out.println("Job " + jobId + " resumed automatically.");
+                } catch (Exception e) {
+                    System.err.println("Failed to resume job " + jobId + ": " + e.getMessage());
+                }
+            }
+        });
+    }
+
 	
 	/**
      * Add a new print job to the system.

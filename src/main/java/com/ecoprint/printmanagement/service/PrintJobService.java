@@ -196,78 +196,93 @@ this.pushNotificationService = pushNotificationService;
 	 **/
 
 	// Method to upload file and create a new job
-    @Transactional
-    public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted) throws IOException {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
-        }
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
-        }
+	@Transactional
+	public void uploadFile(MultipartFile file, String userName, String description, int pagesPrinted) throws IOException {
+	    validateFile(file); // Step 1: Validate the uploaded file
+	    validatePagesPrinted(pagesPrinted); // Step 2: Validate the pages printed
+	    String fileType = tika.detect(file.getInputStream());
+	    validateFileType(fileType); // Step 3: Validate file type
 
-        String fileType = tika.detect(file.getInputStream());
-        validateFileType(fileType);
+	    User user = validateUser(userName); // Step 4: Validate user existence
 
-        // Retrieve the User entity based on userName
-        User user = userrepository.findByUsername(userName)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "username", userName));
+	    byte[] fileData = file.getBytes();
+	    String fileName = file.getOriginalFilename();
 
-        if (!userrepository.existsById(user.getId())) {
-            throw new IllegalArgumentException("User does not exist");
-        }
-        
+	    // Step 5: Create and save SubmittedJob
+	    SubmittedJobs submittedJob = createSubmittedJob(file, user, description, pagesPrinted, fileData, fileType);
+	    submitJobRepository.save(submittedJob);
 
+	    // Step 6: Create and save PrintJob
+	    PrintJob printJob = createPrintJob(file, user, description, pagesPrinted, fileData, fileType);
+	    printJobRepository.save(printJob);
 
-        byte[] fileData = file.getBytes();
-        
-        String fileName = file.getOriginalFilename(); // Extract file name        
-        SubmittedJobs submittedJob  = new SubmittedJobs();
-        submittedJob.setFileName(file.getOriginalFilename());
-        submittedJob.setFileType(fileType);
-        submittedJob.setFileSize(file.getSize());
-        submittedJob.setUser(user); // Set the User entity
-        submittedJob.setUserName(user.getUsername()); // Populate the userName field
-        submittedJob.setUploadTimestamp(LocalDateTime.now());
-        submittedJob.setFileData(fileData);
-        submittedJob.setDescription(description);
-        submittedJob.setStatus(PrintJobStatus.SUBMITTED);
-        submittedJob.setPagesPrinted(pagesPrinted);
-        Assert.notNull(submittedJob.getFileName(), "File name must not be null");
-        Assert.notNull(submittedJob.getStatus(), "Job status must not be null");
-        submitJobRepository.save(submittedJob);
-        Long currentUserId = getCurrentUserId();
-		PrintJob printJob = new PrintJob();
-		printJob.setFileName(fileName); // Set file name
-		printJob.setFileType(fileType); // Set file type
-		printJob.setFileSize(file.getSize()); // Set file size
-		printJob.setUser(user); // Set the User entity
-		printJob.setUserName(user.getUsername()); // Populate the userName field
-		printJob.setUploadTimestamp(LocalDateTime.now()); // Timestamp for upload
-		printJob.setFileData(fileData); // Set the file data
-		printJob.setDescription(description); // Set description
-		printJob.setPagesPrinted(pagesPrinted); // Set pages printed
-		//printJob.setCost(cost); // Set cost
-		printJob.setStatus(PrintJobStatus.SUBMITTED); // Set job status as SUBMITTED
-		printJob.setSubmittedAt(LocalDateTime.now()); // Set submission timestamp
-		printJobRepository.save(printJob);
-		// Log job submission
+	    // Step 7: Log the job submission action
+	    logJobAction(
+	        printJob.getId(), // Job ID
+	        PrintJobStatus.SUBMITTED, // Previous status (if any)
+	        PrintJobStatus.SUBMITTED, // Updated status (after file upload)
+	        getCurrentUserId(), // Current user ID (retrieved from context/session)
+	        "Job submitted with file upload", // Log message
+	        Optional.of(userName), // User name (Optional)
+	        Optional.empty(), // No additional data
+	        Optional.empty(), // No position data
+	        "file_upload", // Action type
+	        Optional.of(fileName), // File name
+	        Optional.of(file.getSize()) // File size
+	    );
+	}
 
-		// Step 8: Log the job submission action
-		logJobAction(printJob.getId(), // Job ID
-				PrintJobStatus.SUBMITTED, // Previous status (if any)
-				PrintJobStatus.SUBMITTED, // Updated status (after file upload)
-				currentUserId, // Current user ID (assuming a method to get it)
-				"Job submitted with file upload", // Log message
-				Optional.of(printJob.getUserName()), // User name (optional)
-				Optional.empty(), // No position info (optional)
-				Optional.empty(), // No position info (optional)
-				"file_upload", // Action type (e.g., file upload)
-				Optional.of(fileName), // File name (passed as Optional)
-				Optional.of(file.getSize()) // File size (passed as Optional)
-		);
+	// Helper methods
+	private void validateFile(MultipartFile file) throws IOException {
+	    if (file == null || file.isEmpty()) {
+	        throw new IllegalArgumentException("File cannot be null or empty. Please upload a valid file.");
+	    }
+	    if (file.getSize() > MAX_FILE_SIZE) {
+	        throw new IllegalArgumentException("File size exceeds the maximum limit of " + (MAX_FILE_SIZE / (1024 * 1024)) + " MB.");
+	    }
+	}
 
+	private User validateUser(String userName) {
+	    return userrepository.findByUsername(userName)
+	        .orElseThrow(() -> new ResourceNotFoundException("User", "username", userName));
+	}
 
-    }
+	private void validatePagesPrinted(int pagesPrinted) {
+	    if (pagesPrinted <= 0) {
+	        throw new IllegalArgumentException("Pages printed must be greater than zero.");
+	    }
+	}
+
+	private SubmittedJobs createSubmittedJob(MultipartFile file, User user, String description, int pagesPrinted, byte[] fileData, String fileType) {
+	    SubmittedJobs submittedJob = new SubmittedJobs();
+	    submittedJob.setFileName(file.getOriginalFilename());
+	    submittedJob.setFileType(fileType);
+	    submittedJob.setFileSize(file.getSize());
+	    submittedJob.setUser(user);
+	    submittedJob.setUserName(user.getUsername());
+	    submittedJob.setUploadTimestamp(LocalDateTime.now());
+	    submittedJob.setFileData(fileData);
+	    submittedJob.setDescription(description);
+	    submittedJob.setStatus(PrintJobStatus.SUBMITTED);
+	    submittedJob.setPagesPrinted(pagesPrinted);
+	    return submittedJob;
+	}
+
+	private PrintJob createPrintJob(MultipartFile file, User user, String description, int pagesPrinted, byte[] fileData, String fileType) {
+	    PrintJob printJob = new PrintJob();
+	    printJob.setFileName(file.getOriginalFilename());
+	    printJob.setFileType(fileType);
+	    printJob.setFileSize(file.getSize());
+	    printJob.setUser(user);
+	    printJob.setUserName(user.getUsername());
+	    printJob.setUploadTimestamp(LocalDateTime.now());
+	    printJob.setFileData(fileData);
+	    printJob.setDescription(description);
+	    printJob.setPagesPrinted(pagesPrinted);
+	    printJob.setStatus(PrintJobStatus.SUBMITTED);
+	    printJob.setSubmittedAt(LocalDateTime.now());
+	    return printJob;
+	}
 
 	// Method to validate file type
 	private void validateFileType(String fileType) {

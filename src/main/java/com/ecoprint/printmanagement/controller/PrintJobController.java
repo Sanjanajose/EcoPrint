@@ -5,6 +5,7 @@ import java.nio.file.AccessDeniedException;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.UUID;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -101,7 +102,7 @@ public class PrintJobController {
         return ResponseEntity.ok(historyList);
     }
 
-
+/*
     @PostMapping("/upload")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     @Operation(
@@ -128,8 +129,49 @@ public class PrintJobController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error during file upload");
         }
     }
+    */
     
-    
+    @PostMapping("/upload")
+    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
+    @Operation(
+        summary = "Upload print job files",
+        description = "Allows a user to upload multiple files for print jobs, calculates the cost based on pages printed for each file, and sets the initial status to SUBMITTED."
+    )
+    public ResponseEntity<String> uploadPrintJob(
+            @RequestParam("files") MultipartFile[] files, // Accepts multiple files
+            @RequestParam("userName") String userName,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam("pagesPrinted") List<Integer> pagesPrinted) { // Pages count for each file
+        try {
+            // Ensure number of files matches number of page counts
+            if (files.length != pagesPrinted.size()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Number of files and page counts must match.");
+            }
+
+            // Process each file
+            for (int i = 0; i < files.length; i++) {
+                MultipartFile file = files[i];
+                int pages = pagesPrinted.get(i);
+                printJobService.uploadFile(file, userName, description, pages);
+            }
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body("Files uploaded successfully and jobs submitted");
+        } catch (IOException e) {
+            logger.error("IOException during file upload", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error occurred during file upload");
+        } catch (IllegalArgumentException e) {
+            logger.error("IllegalArgumentException: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            logger.error("Unexpected error", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Unexpected error during file upload");
+        }
+    }
+
     
     
 

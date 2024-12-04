@@ -19,6 +19,18 @@ public class PrinterCommunicator {
         // Send command to cancel the job
         return true; // Return based on printer response
     }
+    
+    
+    public boolean isPrinterAvailable(long jobId) {
+        // Logic to check if the printer is available for the specific job
+        // Example: Query printer status or check job queue
+    	
+       // PrinterStatus status = printerApi.getPrinterStatusForJob(jobId);
+       // return status.isOnline() && !status.hasError();
+
+        return true; // Replace with actual implementation
+    }
+
 
 
 }
