@@ -38,9 +38,7 @@ public interface UserDeviceRepository extends JpaRepository<UserDevice, Long> {
     List<UserDevice> findByUserId(Long userId);
 
 
-        @Query("SELECT ud.notificationToken FROM USER_DEVICE ud WHERE ud.user.id = :userId")
-        Optional<String> findDeviceTokenByUserId(@Param("userId") long userId);
-    
+       
         
         
             Optional<UserDevice> findByDeviceId(String deviceId);
@@ -49,5 +47,12 @@ public interface UserDeviceRepository extends JpaRepository<UserDevice, Long> {
             void deleteByDeviceId(String deviceId);
         
             List<UserDevice> findAllByUserId(Long userId);
+            
+            
+            @Query("SELECT d.notificationToken FROM UserDevice d WHERE d.user.id = :userId AND d.isRefreshActive = true")
+            List<String> findActiveNotificationTokensByUserId(@Param("userId") Long userId);
 
+
+            @Query("SELECT ud.notificationToken FROM UserDevice ud WHERE ud.user.id = :userId")
+            Optional<String> findDeviceTokenByUserId(@Param("userId") long userId);
 }

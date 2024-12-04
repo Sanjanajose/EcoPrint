@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.ecoprint.printmanagement.dto.QueuedJobDTO;
 import com.ecoprint.printmanagement.exception.NetworkException;
 import com.ecoprint.printmanagement.exception.PrinterException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
@@ -54,6 +55,7 @@ import com.ecoprint.printmanagement.model.PrintJobRequest;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
 import com.ecoprint.printmanagement.model.Printer;
 import com.ecoprint.printmanagement.model.Priority;
+import com.ecoprint.printmanagement.model.QueuedJob;
 import com.ecoprint.printmanagement.model.Role;
 import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.SubmittedJobs;
@@ -64,8 +66,10 @@ import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.PrinterRepository;
+import com.ecoprint.printmanagement.repository.QueuedJobRepository;
 import com.ecoprint.printmanagement.repository.RoleRepository;
 import com.ecoprint.printmanagement.repository.SubmitJobRepository;
+import com.ecoprint.printmanagement.repository.UserDeviceRepository;
 import com.ecoprint.printmanagement.repository.UserRepository;
 import com.ecoprint.printmanagement.response.ReadyJobResponse;
 import com.google.api.client.util.Objects;
@@ -98,7 +102,12 @@ public class PrintJobService {
 	@Autowired
 	private NotificationLogRepository notificationLogRepository;
 
-
+	@Autowired
+	private QueuedJobRepository queuedJobRepository;
+	
+	@Autowired
+	private QueueManagementService queueManagementService;
+	
 	@Autowired
 	private RoleRepository roleRepository;
 
@@ -115,6 +124,9 @@ public class PrintJobService {
 
     @Autowired
     private FailedJobRepository failedJobRepository;
+    
+    @Autowired
+    private UserDeviceRepository userdevicerepository;
 
 
     @Autowired
@@ -431,7 +443,38 @@ this.pushNotificationService = pushNotificationService;
  
 	    // Send notifications to job owner and admins
 	    sendStatusChangeNotifications(jobId, status, printJob);
+	    
+	    
+	    if (status == PrintJobStatus.QUEUED) {
+            queueManagementService.addJobToQueue(printJob);	    }
 	}
+	
+	
+	public void addJobToQueue(PrintJob printJob) {
+	    // Validate the PrintJob object to ensure required fields are not null
+	    if (printJob == null || printJob.getId() == null || printJob.getFileName() == null ||
+	        printJob.getUser() == null || printJob.getPrinter() == null || printJob.getPriority() == null ||
+	        printJob.getStatus() == null) {
+	        throw new IllegalArgumentException("Invalid PrintJob data. Ensure all required fields are set.");
+	    }
+
+	    // Map values from PrintJob to QueuedJob entity
+	    QueuedJob queuedJob = new QueuedJob();
+	    queuedJob.setJobId(printJob.getId()); // Ensure getId is the correct method for PrintJob
+	    queuedJob.setDocumentName(printJob.getFileName());
+	    queuedJob.setUserId(printJob.getUser().getId());
+	    queuedJob.setPrinterId(printJob.getPrinter().getId());
+	    queuedJob.setPagesPrinted(printJob.getPagesPrinted());
+	    queuedJob.setNumCopies(printJob.getNumCopies());
+	    queuedJob.setSubmissionTimestamp(LocalDateTime.now()); // Set the current timestamp
+	    queuedJob.setJobPriority(printJob.getPriority()); // Priority from PrintJob
+	    queuedJob.setStatus(PrintJobStatus.QUEUED); // Force status to QUEUED for queued jobs
+
+	    // Save to the queued_jobs table
+	    queuedJobRepository.save(queuedJob); // Ensure queuedJobRepository is properly injected and used
+	}
+
+
 	
 	
 	private boolean hasRole(String role) {
@@ -677,8 +720,51 @@ this.pushNotificationService = pushNotificationService;
 	    failedJob.setRetryCount(0); // Initial retry count
 	    failedJob.setPrintJob(printJob);
 	    failedJob.setPrinter(printJob.getPrinter()); // If PrintJob has a printer reference
-
+	    
+	    
+	    
 	    saveFailedJob(failedJob); // Method to save failed job in FailedJob table
+	}
+
+	
+	
+	public void notifyJobCancellation(Long jobId, Long cancelledByUserId) {
+	    PrintJob job = printJobRepository.findById(jobId)
+	            .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "ID", jobId));
+
+	    User jobOwner = job.getUser();
+	    if (jobOwner == null) {
+	        throw new RuntimeException("Job owner not found for the print job");
+	    }
+
+	    User cancelledByUser = userrepository.findById(cancelledByUserId)
+	            .orElseThrow(() -> new ResourceNotFoundException("User", "ID", cancelledByUserId));
+
+	    String messageForOwner = String.format(
+	        "Dear %s, your print job with ID %d (%s) has been canceled by %s.",
+	        jobOwner.getUsername(), job.getId(), job.getDescription(), cancelledByUser.getUsername()
+	    );
+
+	    String messageForAdmin = String.format(
+	        "Print job with ID %d (%s), owned by %s, was canceled by %s.",
+	        job.getId(), job.getDescription(), jobOwner.getUsername(), cancelledByUser.getUsername()
+	    );
+
+	    // Notify job owner
+	    emailNotificationService.sendEmailNotification(
+	        jobOwner.getEmail(), "Notification: Print Job Canceled", messageForOwner
+	    );
+	    pushNotificationService.sendPushNotification(jobOwner.getId(), "Print Job Canceled", messageForOwner);
+
+	    // Notify all admins
+	    List<User> admins = userrepository.findAllAdmins(RoleName.ROLE_ADMIN);
+
+	    admins.forEach(admin -> {
+	        emailNotificationService.sendEmailNotification(
+	            admin.getEmail(), "Notification: Print Job Canceled", messageForAdmin
+	        );
+	        pushNotificationService.sendPushNotification(admin.getId(), "Print Job Canceled", messageForAdmin);
+	    });
 	}
 
 	
@@ -1082,6 +1168,50 @@ job.setUploadTimestamp(LocalDateTime.now());
 		// Log the queue position change
 		logQueuePositionChange(jobId, previousPosition, newPosition, currentUserId, "Job reordered in the queue");
 	}
+	
+	public void notifyJobReorder(Long jobId, Long reorderedByUserId, int newPosition) {
+	    PrintJob job = printJobRepository.findById(jobId)
+	            .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "ID", jobId));
+
+	    User jobOwner = job.getUser();
+	    if (jobOwner == null) {
+	        throw new RuntimeException("Job owner not found for the print job");
+	    }
+
+	    User reorderedByUser = userrepository.findById(reorderedByUserId)
+	            .orElseThrow(() -> new ResourceNotFoundException("User", "ID", reorderedByUserId));
+
+	    String messageForOwner = String.format(
+	        "Dear %s, your print job with ID %d (%s) has been reordered by %s to position %d.",
+	        jobOwner.getUsername(), job.getId(), job.getDescription(), reorderedByUser.getUsername(), newPosition
+	    );
+
+	    String messageForAdmin = String.format(
+	        "Print job with ID %d (%s), owned by %s, was reordered by %s to position %d.",
+	        job.getId(), job.getDescription(), jobOwner.getUsername(), reorderedByUser.getUsername(), newPosition
+	    );
+
+	    // Notify job owner
+	    emailNotificationService.sendEmailNotification(
+	        jobOwner.getEmail(), "Notification: Print Job Reordered", messageForOwner
+	    );
+	    pushNotificationService.sendPushNotification(jobOwner.getId(), "Print Job Reordered", messageForOwner);
+
+	    // Notify all admins
+	    List<User> admins = userrepository.findAllAdmins(RoleName.ROLE_ADMIN);
+
+	    admins.forEach(admin -> {
+	        emailNotificationService.sendEmailNotification(
+	            admin.getEmail(), "Notification: Print Job Reordered", messageForAdmin
+	        );
+	        pushNotificationService.sendPushNotification(admin.getId(), "Print Job Reordered", messageForAdmin);
+	    });
+	}
+
+
+	
+	
+	
 
 	private void adjustQueuePositions(PrintJob job, int newPosition) {
 		int oldPosition = job.getQueuePosition();

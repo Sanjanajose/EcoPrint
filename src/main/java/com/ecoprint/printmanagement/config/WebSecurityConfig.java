@@ -15,11 +15,20 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.ecoprint.printmanagement.model.Permission;
 import com.ecoprint.printmanagement.security.JwtAuthenticationEntryPoint;
 import com.ecoprint.printmanagement.security.JwtAuthenticationFilter;
 import com.ecoprint.printmanagement.service.CustomUserDetailsService;
+
+import java.util.Arrays;
+import java.util.List;
+
+
+
 
 @Profile("!dev")
 @Configuration
@@ -51,6 +60,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/swagger-resources/**").permitAll()
                         .requestMatchers("/swagger-resources").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/register").permitAll()
                         .requestMatchers("/ws").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/admin/**").hasAuthority(Permission.MANAGE_USERS.name())  // Admin-only access
@@ -88,7 +98,21 @@ public class WebSecurityConfig {
         return authenticationManagerBuilder.build();
     }
     
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        // Specify allowed origins explicitly (replace with your frontend URL if needed)
+        configuration.setAllowedOriginPatterns(List.of("http://localhost:5173", "http://10.255.254.49"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
     
+  
     
 
 

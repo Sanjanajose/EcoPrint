@@ -31,7 +31,7 @@ import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 
 @Table(name = "user_device")
-@Entity(name = "USER_DEVICE")
+@Entity
 public class UserDevice extends DateAudit {
 
     @Id

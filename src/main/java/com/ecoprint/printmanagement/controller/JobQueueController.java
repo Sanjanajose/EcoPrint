@@ -28,7 +28,7 @@ public class JobQueueController {
      * @return A map categorizing jobs by their status.
      */
     @GetMapping("/queue-status")
-    @Operation(summary = "allows to fetch the job statuses from the service layer")
+    @Operation(summary = "allows to fetch the job statuses from the service layer- queue")
     public ResponseEntity<Map<String, List<PrintJob>>> getQueueJobStatuses() {
         // Fetch the job statuses from the service layer
         Map<String, List<PrintJob>> queueJobStatuses = jobQueueService.getQueueJobStatuses();

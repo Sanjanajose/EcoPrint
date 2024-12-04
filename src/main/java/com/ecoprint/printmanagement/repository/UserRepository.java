@@ -77,7 +77,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM USER u LEFT JOIN FETCH u.backupCodes")
     Page<User> findAllWithBackupCodes(Pageable pageable);
 
+    @Query("SELECT u FROM USER u JOIN u.roles r WHERE r.role = :roleName")
+    List<User> findAllByRoleName(@Param("roleName") String roleName);
+
     
     
+    @Query("SELECT u FROM USER u JOIN u.roles r WHERE r.role = :roleName")
+    List<User> findAllAdmins(@Param("roleName") RoleName roleName);
     
+    @Query("SELECT ud.notificationToken FROM UserDevice ud WHERE ud.user.id = :userId AND ud.isRefreshActive = true")
+    List<String> findActiveNotificationTokensByUserId(@Param("userId") Long userId);
+
 }

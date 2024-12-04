@@ -375,7 +375,6 @@ public class AuthService {
     
     
     
-    
 
     public User resetWithTempPassword(String email) {
         String tempPassword = UUID.randomUUID().toString().substring(0, 8);

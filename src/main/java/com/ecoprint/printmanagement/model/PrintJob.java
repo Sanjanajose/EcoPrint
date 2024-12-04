@@ -185,7 +185,10 @@ public class PrintJob {
     private String paperSize;
 
 
+    @Column(name = "num_copies", nullable = false, columnDefinition = "INT DEFAULT 1")
+    private int numCopies;
 
+    
     
  
     // Constructors
@@ -352,7 +355,14 @@ public class PrintJob {
 		this.paperSize = paperSize;
 	}
   
-    
+
+    public int getNumCopies() {
+        return numCopies;
+    }
+
+    public void setNumCopies(int numCopies) {
+        this.numCopies = numCopies;
+    }
 	    
  
 

@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+import com.ecoprint.printmanagement.model.CustomUserDetails;
 import com.ecoprint.printmanagement.model.JobHistory;
 import com.ecoprint.printmanagement.model.PrintHistoryMap;
 import com.ecoprint.printmanagement.model.PrintJob;
@@ -203,16 +204,17 @@ public class PrintJobController {
     @PutMapping("/{jobId}/pause")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     @Operation(summary = "Pause print job", description = "Allows a user or admin to pause a print job.")
-    public ResponseEntity<String> pauseJob(@PathVariable Long jobId) {
+    public ResponseEntity<String> pauseJob(@PathVariable Long jobId ) {
         return updateJobStatus(jobId, PrintJobStatus.PAUSED);
     }
 
     @PutMapping("/{jobId}/cancel")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     @Operation(summary = "Cancel print job", description = "Allows a user or admin to cancel a print job.")
-    public ResponseEntity<String> cancelJob(@PathVariable Long jobId) {
+    public ResponseEntity<String> cancelJob(@PathVariable Long jobId, @RequestParam Long cancelledByUserId) {
         try {
             printJobService.cancelJob(jobId);
+            printJobService.notifyJobCancellation(jobId, cancelledByUserId);
             return ResponseEntity.ok("Print job canceled successfully and marked as FAILED");
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Print job not found");
@@ -222,6 +224,10 @@ public class PrintJobController {
             logger.error("Unexpected error during cancel operation", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Unexpected error occurred");
         }
+    }
+
+    private Long getCurrentUserId() {
+        return ((CustomUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getId();
     }
 
     
@@ -412,14 +418,20 @@ public class PrintJobController {
     @Operation(summary = "allows to resume the paused print jobs ")
     public ResponseEntity<String> resumeJob(@PathVariable Long jobId) {
         printJobService.resumeJob(jobId);  
+        
+        // Send notifications
+        String message = "Print job with ID " + jobId + " has been canceled and marked as FAILED.";
+        
+
         return ResponseEntity.ok("Job resumed successfully");
     }
     
     @PutMapping("/{jobId}/reorder")
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     @Operation(summary = "allows to reorder the print jobs ", description = "allows users to reorder the print jobs if the user is an admin or the job owner")
-    public ResponseEntity<String> reorderJob(@PathVariable Long jobId, @RequestParam int newPosition) {
+    public ResponseEntity<String> reorderJob(@PathVariable Long jobId, @RequestParam int newPosition, @RequestParam Long reorderedByUserId) {
         printJobService.reorderJob(jobId, newPosition);
+        printJobService.notifyJobReorder(jobId, reorderedByUserId, newPosition);
         return ResponseEntity.ok("Print job reordered");
     }
 
