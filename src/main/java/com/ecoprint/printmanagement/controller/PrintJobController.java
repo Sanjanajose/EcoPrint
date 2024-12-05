@@ -524,4 +524,18 @@ public class PrintJobController {
   
 
 */
+    
+    
+    /**
+     * Mark a job as completed
+     *
+     * @param jobId the ID of the job to mark as completed
+     * @return ResponseEntity<Void>
+     */
+    @PostMapping("/{id}/complete")
+    @PreAuthorize("hasRole('ADMIN')") // Restrict to admin users
+    public ResponseEntity<Void> markJobAsCompleted(@PathVariable Long id) {
+        printJobService.markJobAsCompleted(id);
+        return ResponseEntity.noContent().build();
+    }
 }

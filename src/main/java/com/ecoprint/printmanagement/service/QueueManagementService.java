@@ -4,6 +4,7 @@ import com.ecoprint.printmanagement.dto.QueuedJobDTO;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
+import com.ecoprint.printmanagement.model.Printer;
 import com.ecoprint.printmanagement.model.QueuedJob;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.QueuedJobRepository;
@@ -141,6 +142,14 @@ public class QueueManagementService {
 
     QueuedJob mapFromPrintJob(PrintJob printJob) {
         QueuedJob queuedJob = new QueuedJob();
+        
+        Printer printer = printJob.getPrinter();
+        if (printer == null) {
+           // log.error("Printer is null for PrintJob ID: {}", printJob.getId());
+            throw new IllegalArgumentException("PrintJob must have an associated Printer");
+        }
+
+        Long printerId = printer.getId();
         queuedJob.setPrintJob(printJob);
         queuedJob.setDocumentName(printJob.getFileName());
         queuedJob.setUserId(printJob.getUser().getId());
@@ -153,6 +162,10 @@ public class QueueManagementService {
         queuedJob.setQueuePosition(determineQueuePosition());
         return queuedJob;
     }
+    
+    
+  
+
 
     private QueuedJobDTO mapToDTO(QueuedJob job) {
         QueuedJobDTO dto = new QueuedJobDTO();

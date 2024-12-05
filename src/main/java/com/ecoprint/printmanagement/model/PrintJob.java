@@ -164,7 +164,7 @@ public class PrintJob {
     private List<FailedJob> failedJobs;
     
     @ManyToOne
-    @JoinColumn(name = "printer_id", nullable = true)
+    @JoinColumn(name = "printer_id", nullable = false)
     private Printer printer;
 
 

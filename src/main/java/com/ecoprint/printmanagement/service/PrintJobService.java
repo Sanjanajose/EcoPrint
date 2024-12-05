@@ -40,6 +40,7 @@ import com.ecoprint.printmanagement.dto.QueuedJobDTO;
 import com.ecoprint.printmanagement.exception.NetworkException;
 import com.ecoprint.printmanagement.exception.PrinterException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
+import com.ecoprint.printmanagement.model.CompletedJob;
 import com.ecoprint.printmanagement.model.CustomUserDetails;
 
 import com.ecoprint.printmanagement.model.FailedJob;
@@ -62,6 +63,7 @@ import com.ecoprint.printmanagement.model.RoleName;
 import com.ecoprint.printmanagement.model.SubmittedJobs;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.model.UserNotificationPreferences;
+import com.ecoprint.printmanagement.repository.CompletedJobRepository;
 import com.ecoprint.printmanagement.repository.FailedJobRepository;
 import com.ecoprint.printmanagement.repository.JobHistoryRepository;
 import com.ecoprint.printmanagement.repository.NotificationLogRepository;
@@ -129,6 +131,9 @@ public class PrintJobService {
     @Autowired
     private UserDeviceRepository userdevicerepository;
 
+    
+    @Autowired
+    private CompletedJobRepository completedJobRepository;
 
     @Autowired
     private AuthService authservice;
@@ -467,6 +472,10 @@ this.pushNotificationService = pushNotificationService;
 
 	    // Save the updated print job
 	    printJobRepository.save(printJob);
+	    
+	    if (status == PrintJobStatus.COMPLETED) {
+	        addToCompletedJobs(printJob); // Add record to CompletedJobs
+	    }
 	    logger.info("Updated print job status to {} for job ID: {}", status, jobId);
 
 	    // Log the job status update action
@@ -478,6 +487,25 @@ this.pushNotificationService = pushNotificationService;
 	    sendStatusChangeNotifications(jobId, status, printJob);
 
 	    logger.info("Completed status update for job ID: {}", jobId);
+	}
+
+	
+	private void addToCompletedJobs(PrintJob printJob) {
+	    CompletedJob completedJob = new CompletedJob();
+	    completedJob.setJobId(printJob.getId());
+	    completedJob.setUserId(printJob.getUser().getId());
+	    completedJob.setStatus(PrintJobStatus.COMPLETED);
+	    completedJob.setCompletedAt(LocalDateTime.now()); // Add completion timestamp
+	    completedJob.setDescription(printJob.getDescription());
+	    completedJob.setPagesPrinted(printJob.getPagesPrinted()); // Adjust if you track printed pages
+	    // Add other fields as needed
+
+	    completedJobRepository.save(completedJob);
+
+	    // Optionally, remove the job from the print_jobs table
+	    printJobRepository.delete(printJob);
+
+	    logger.info("Job ID: {} moved to CompletedJobs table.", printJob.getId());
 	}
 
 
@@ -1937,6 +1965,68 @@ job.setUploadTimestamp(LocalDateTime.now());
 	    printJobRepository.save(job);
 
 	    logger.info("Job {} marked as favorite by user {}", jobId, username);
+	}
+
+	
+	@Transactional
+	public void markJobAsCompleted(Long jobId) {
+	    logger.debug("Attempting to retrieve PrintJob with ID: {}", jobId);
+
+	    // Retrieve the print job
+	    PrintJob printJob = printJobRepository.findById(jobId)
+	            .orElseThrow(() -> new ResourceNotFoundException("PrintJob with ID " + jobId + " not found or inaccessible."));
+
+	    logger.info("PrintJob retrieved successfully: {}", printJob);
+
+	    // Ensure the job is in a status that allows completion
+	    if (printJob.getStatus() != PrintJobStatus.PRINTING) {
+	        logger.warn("Invalid status for job completion: {}", printJob.getStatus());
+	        throw new IllegalStateException("Job can only be marked as completed if it is in PRINTING status.");
+	    }
+
+	    PrintJobStatus previousStatus = printJob.getStatus();
+
+	    // Create a CompletedJob instance
+	    CompletedJob completedJob = new CompletedJob();
+	    completedJob.setJobId(printJob.getId());
+	    completedJob.setUserId(printJob.getUser().getId());
+	    completedJob.setStatus(PrintJobStatus.COMPLETED);
+	    completedJob.setCompletedAt(LocalDateTime.now());
+	    completedJob.setDescription(printJob.getDescription());
+	    completedJob.setPagesPrinted(printJob.getPagesPrinted());
+	    
+	    completedJob.setPrinterName(printJob.getPrinter().getName());
+	    completedJob.setSubmittedAt(printJob.getSubmittedAt());
+
+
+	    // Save the completed job
+	    completedJobRepository.save(completedJob);
+
+	    logger.info("CompletedJob created successfully for Job ID: {}", jobId);
+
+	    // Remove the job from the active jobs table
+	    printJobRepository.delete(printJob);
+	    logger.info("PrintJob deleted from active jobs: {}", jobId);
+
+	    // Log the status change
+	    Long currentUserId = getCurrentUserId(); // Replace with your method to get the current user ID
+	    logJobAction(jobId,
+	            previousStatus,
+	            PrintJobStatus.COMPLETED,
+	            currentUserId,
+	            "Job marked as completed and moved to CompletedJobs",
+	            Optional.ofNullable(printJob.getUser().getUsername()),
+	            Optional.empty(),
+	            Optional.empty(),
+	            "complete",
+	            Optional.empty(),
+	            Optional.empty()
+	    );
+
+	    // Send notifications (Optional)
+	    sendStatusChangeNotifications(jobId, PrintJobStatus.COMPLETED, printJob);
+
+	    logger.info("Job ID: {} marked as completed and moved to CompletedJobs.", jobId);
 	}
 
 
