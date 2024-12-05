@@ -1,21 +1,20 @@
 package com.ecoprint.printmanagement.service;
 
 import com.ecoprint.printmanagement.dto.QueuedJobDTO;
-import com.ecoprint.printmanagement.model.QueuedJob;
+import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
-import com.ecoprint.printmanagement.model.Priority;
+import com.ecoprint.printmanagement.model.QueuedJob;
 import com.ecoprint.printmanagement.repository.PrintJobRepository;
 import com.ecoprint.printmanagement.repository.QueuedJobRepository;
-import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
-
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,106 +30,128 @@ public class QueueManagementService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    // Constructor injection for better testability
     public QueueManagementService(QueuedJobRepository queuedJobRepository, PrintJobRepository printJobRepository) {
         this.queuedJobRepository = queuedJobRepository;
         this.printJobRepository = printJobRepository;
     }
 
-    /**
-     * Adds a job to the queue using DTO.
-     *
-     * @param queuedJobDTO the DTO containing job details
-     * @return QueuedJobDTO of the saved job
-     */
-    @Transactional
-    public QueuedJobDTO addJobToQueue(QueuedJobDTO queuedJobDTO) {
-        PrintJob printJob = printJobRepository.findById(queuedJobDTO.getJobId())
-                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", queuedJobDTO.getJobId()));
+  /*  @Transactional
+    public QueuedJobDTO addJobToQueue(Long jobId) {
+        // Fetch the PrintJob based on jobId
+        PrintJob printJob = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
 
-        QueuedJob queuedJob = mapFromPrintJob(printJob);
-        QueuedJob savedJob = queuedJobRepository.save(queuedJob);
-
-        return mapToDTO(savedJob);
-    }
-
-    /**
-     * Adds a job to the queue using a PrintJob entity.
-     *
-     * @param printJob the PrintJob entity
-     */
-    @Transactional
-    public void addJobToQueue(PrintJob printJob) {
-        PrintJob managedPrintJob = entityManager.find(PrintJob.class, printJob.getId());
-        if (managedPrintJob == null) {
-            throw new IllegalArgumentException("PrintJob not found with ID: " + printJob.getId());
+        // Validate the current status of the PrintJob
+        if (printJob.getStatus() != PrintJobStatus.SUBMITTED && printJob.getStatus() != PrintJobStatus.READY) {
+            throw new IllegalStateException("Only jobs in SUBMITTED or READY status can be added to the queue");
         }
 
-        QueuedJob queuedJob = mapFromPrintJob(managedPrintJob);
-        queuedJobRepository.save(queuedJob);
-    }
+        // Map PrintJob to QueuedJob
+        QueuedJob queuedJob = mapFromPrintJob(printJob);
 
-    /**
-     * Retrieves all queued jobs as DTOs.
-     *
-     * @return List of QueuedJobDTOs
-     */
-    public List<QueuedJobDTO> getAllQueuedJobs() {
-        List<QueuedJob> queuedJobs = queuedJobRepository.findAll();
-        return queuedJobs.stream().map(this::mapToDTO).collect(Collectors.toList());
-    }
+        // Calculate the next queue position
+        Integer maxPosition = queuedJobRepository.findMaxQueuePosition();
+        int nextPosition = (maxPosition != null) ? maxPosition + 1 : 1; // Start from 1 if no jobs exist
+        queuedJob.setQueuePosition(nextPosition);
 
-    /**
-     * Updates the status of a queued job.
-     *
-     * @param jobId  the ID of the job to update
-     * @param status the new status
-     * @return QueuedJobDTO of the updated job
-     */
+        // Save the QueuedJob
+        QueuedJob savedJob = queuedJobRepository.save(queuedJob);
+
+        // Update the PrintJob's status to QUEUED and set its queue position
+        printJob.setStatus(PrintJobStatus.QUEUED);
+        printJob.setQueuePosition(nextPosition);
+        printJobRepository.save(printJob);
+
+        
+        // Return the DTO
+        return mapToDTO(savedJob);
+    }*/
+    
+    
     @Transactional
-    public QueuedJobDTO updateJobStatus(Long jobId, PrintJobStatus status) {
+    public QueuedJobDTO addJobToQueue(Long jobId) {
+        // Fetch the PrintJob entity
+        PrintJob printJob = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
+
+        // Validate the current status
+        if (printJob.getStatus() != PrintJobStatus.SUBMITTED && printJob.getStatus() != PrintJobStatus.READY) {
+            throw new IllegalStateException("Only jobs in SUBMITTED or READY status can be added to the queue.");
+        }
+
+        // Map and save the QueuedJob entity
+        QueuedJob queuedJob = mapFromPrintJob(printJob);
+        queuedJob.setQueuePosition(determineQueuePosition());
+        queuedJob.setStatus(PrintJobStatus.QUEUED);
+        queuedJob.setPrintJob(printJob); // Ensure bi-directional reference
+        queuedJobRepository.save(queuedJob);
+
+        // Update the PrintJob entity
+        printJob.setStatus(PrintJobStatus.QUEUED);
+        printJob.setQueuePosition(queuedJob.getQueuePosition());
+        printJob.setQueuedAt(LocalDateTime.now()); // Set the queuedAt timestamp
+        printJobRepository.save(printJob);
+
+        // Optional: Synchronize the persistence context
+        entityManager.flush();
+
+        // Log success
+        //logger.info("Successfully added job ID: {} to queue. Queue position: {}", jobId, queuedJob.getQueuePosition());
+
+        return mapToDTO(queuedJob);
+    }
+
+
+    public List<QueuedJobDTO> getAllQueuedJobs() {
+        return queuedJobRepository.findAll()
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+   
+    public String getJobOwner(Long jobId) {
+        // Fetch job details from queued_jobs
+        QueuedJob queuedJob = queuedJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("QueuedJob", "jobId", jobId));
+        
+        // Convert Long to String before returning
+        return queuedJob.getUserId().toString();
+    }
+
+
+
+
+    @Transactional
+    public void removeJobFromQueue(Long jobId) {
+        // Check if the queued job exists
         QueuedJob queuedJob = queuedJobRepository.findById(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("QueuedJob", "jobId", jobId));
 
-        queuedJob.setStatus(status);
-        QueuedJob updatedJob = queuedJobRepository.save(queuedJob);
-        return mapToDTO(updatedJob);
-    }
-
-    /**
-     * Removes a job from the queue.
-     *
-     * @param jobId the ID of the job to remove
-     */
-    @Transactional
-    public void removeJobFromQueue(Long jobId) {
-        if (!queuedJobRepository.existsById(jobId)) {
-            throw new ResourceNotFoundException("QueuedJob", "jobId", jobId);
-        }
+        // Remove the queued job
         queuedJobRepository.deleteById(jobId);
+
+        // Update the status in the PrintJob table to READY
+        PrintJob printJob = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
+        printJob.setStatus(PrintJobStatus.READY);
+        printJob.setReadyAt(LocalDateTime.now()); // Optionally set the ready timestamp
+        printJobRepository.save(printJob);
     }
 
-    // --- Helper Methods ---
-
-    /**
-     * Maps a QueuedJobDTO to a QueuedJob entity.
-     *
-     * @param dto the DTO
-     * @return QueuedJob entity
-     */
-    private QueuedJob mapToEntity(QueuedJobDTO dto) {
-        QueuedJob job = new QueuedJob();
-        job.setJobId(dto.getJobId());
-        job.setDocumentName(dto.getDocumentName());
-        job.setUserId(dto.getUserId());
-        job.setPrinterId(dto.getPrinterId());
-        job.setPagesPrinted(dto.getPagesPrinted());
-        job.setNumCopies(dto.getNumCopies());
-        job.setSubmissionTimestamp(dto.getSubmissionTimestamp());
-        job.setJobPriority(Enum.valueOf(Priority.class, dto.getJobPriority()));
-        job.setStatus(Enum.valueOf(PrintJobStatus.class, dto.getStatus()));
-        job.setQueuePosition(dto.getQueuePosition()); // Ensure DTO has this field
-        return job;
+    QueuedJob mapFromPrintJob(PrintJob printJob) {
+        QueuedJob queuedJob = new QueuedJob();
+        queuedJob.setPrintJob(printJob);
+        queuedJob.setDocumentName(printJob.getFileName());
+        queuedJob.setUserId(printJob.getUser().getId());
+        queuedJob.setPrinterId(printJob.getPrinter().getId());
+        queuedJob.setPagesPrinted(printJob.getPagesPrinted() > 0 ? printJob.getPagesPrinted() : 1);
+        queuedJob.setNumCopies(printJob.getNumCopies());
+        queuedJob.setSubmissionTimestamp(LocalDateTime.now());
+        queuedJob.setJobPriority(printJob.getPriority());
+        queuedJob.setStatus(PrintJobStatus.QUEUED);
+        queuedJob.setQueuePosition(determineQueuePosition());
+        return queuedJob;
     }
 
     private QueuedJobDTO mapToDTO(QueuedJob job) {
@@ -139,38 +160,51 @@ public class QueueManagementService {
         dto.setDocumentName(job.getDocumentName());
         dto.setUserId(job.getUserId());
         dto.setPrinterId(job.getPrinterId());
-        dto.setPagesPrinted(job.getPagesPrinted());
+        dto.setPagesPrinted(job.getPagesPrinted() > 0 ? job.getPagesPrinted() : 1);
         dto.setNumCopies(job.getNumCopies());
         dto.setSubmissionTimestamp(job.getSubmissionTimestamp());
         dto.setJobPriority(job.getJobPriority().name());
         dto.setStatus(job.getStatus().name());
-        dto.setQueuePosition(job.getQueuePosition()); // Ensure DTO has this field
+        dto.setQueuePosition(job.getQueuePosition() > 0 ? job.getQueuePosition() : 1);
         return dto;
     }
 
+   /* Integer determineQueuePosition() {
+        Integer maxQueuePositionInQueuedJobs = queuedJobRepository.findMaxQueuePosition();
+        Integer maxQueuePositionInPrintJobs = printJobRepository.findMaxQueuePosition();
 
-    /**
-     * Maps a PrintJob entity to a QueuedJob entity.
-     *
-     * @param printJob the PrintJob entity
-     * @return QueuedJob entity
-     */
-   
-    
-    private QueuedJob mapFromPrintJob(PrintJob printJob) {
-        System.out.println("Mapping from PrintJob: pagesPrinted = " + printJob.getPagesPrinted());
-        QueuedJob queuedJob = new QueuedJob();
-        queuedJob.setPrintJob(printJob);
-        queuedJob.setDocumentName(printJob.getFileName());
-        queuedJob.setUserId(printJob.getUser().getId());
-        queuedJob.setPrinterId(printJob.getPrinter().getId());
-        System.out.println("Mapping from PrintJob: pagesPrinted = " + printJob.getPagesPrinted());
-        queuedJob.setPagesPrinted(printJob.getPagesPrinted());
-        queuedJob.setNumCopies(printJob.getNumCopies());
-        queuedJob.setSubmissionTimestamp(printJob.getUploadTimestamp());
-        queuedJob.setJobPriority(printJob.getPriority());
-        queuedJob.setStatus(PrintJobStatus.QUEUED);
-        return queuedJob;
+        int maxPosition = Math.max(
+                (maxQueuePositionInQueuedJobs != null ? maxQueuePositionInQueuedJobs : 0),
+                (maxQueuePositionInPrintJobs != null ? maxQueuePositionInPrintJobs : 0)
+        );
+        return maxPosition + 1;
     }
+    */
+    
+    
+    Integer determineQueuePosition() {
+        Integer maxPosition = Math.max(
+            queuedJobRepository.findMaxQueuePosition() != null ? queuedJobRepository.findMaxQueuePosition() : 0,
+            printJobRepository.findMaxQueuePosition() != null ? printJobRepository.findMaxQueuePosition() : 0
+        );
+        return maxPosition + 1;
+    }
+
+    
+    @Transactional
+    public void updateQueuePosition(Long jobId, Integer queuePosition) {
+        // Update the queue position in queued_jobs table
+        QueuedJob queuedJob = queuedJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("QueuedJob", "jobId", jobId));
+        queuedJob.setQueuePosition(queuePosition);
+        queuedJobRepository.save(queuedJob);
+
+        // Update the queue position in print_jobs table
+        PrintJob printJob = printJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
+        printJob.setQueuePosition(queuePosition);
+        printJobRepository.save(printJob);
+    }
+
 
 }

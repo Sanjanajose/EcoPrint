@@ -37,11 +37,8 @@ public class QueuedJob {
     @Column(nullable = false)
     private PrintJobStatus status = PrintJobStatus.QUEUED; // Status of the print job
     
-    @Column(nullable = false)
-    private int queuePosition; // Position of the job in the queue
-
-    
-    
+    @Column(name = "queue_position", nullable = true)
+    private Integer queuePosition; // Change from int to Integer
     @OneToOne
     @MapsId
     @JoinColumn(name = "job_id", referencedColumnName = "id")
@@ -85,7 +82,7 @@ public class QueuedJob {
         return pagesPrinted;
     }
 
-    public void setPagesPrinted(int numPages) {
+    public void setPagesPrinted(int pagesPrinted) {
         this.pagesPrinted = pagesPrinted;
     }
 
@@ -132,11 +129,11 @@ public class QueuedJob {
     }
     
     // Getter and Setter for queuePosition
-    public int getQueuePosition() {
+    public Integer getQueuePosition() {
         return queuePosition;
     }
 
-    public void setQueuePosition(int queuePosition) {
+    public void setQueuePosition(Integer queuePosition) {
         this.queuePosition = queuePosition;
     }
 }

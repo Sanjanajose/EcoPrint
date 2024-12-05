@@ -100,12 +100,6 @@ public class PrintJob {
     @Column(name = "description", length = 500)
     private String description;
  
-    // Queue Management
-    @Column
-
-    private Integer queuePosition;
-
-
     
 
 
@@ -120,10 +114,14 @@ public class PrintJob {
 
     // Print Details
 
-    @NotNull(message = "Pages printed is mandatory")
-    @Min(value = 1, message = "Pages printed must be at least 1")
-    @Column(name="pages_printed", nullable = false)
-    private int pagesPrinted;
+    
+    
+    @Column(name = "pages_printed", nullable = false, columnDefinition = "INT DEFAULT 1")
+    private int pagesPrinted = 1;
+
+    @Column(name = "queue_position", nullable = true)
+    private Integer queuePosition = 1;
+
  
     @Column(name="cost", nullable = true)
     private double cost;
@@ -195,9 +193,12 @@ public class PrintJob {
 
     
 
+  
     public PrintJob() {
-    	this.priority = Priority.HIGH;
+        this.pagesPrinted = 1; // Default value
+        this.priority = Priority.HIGH;
     }
+
 
 
     // Getters and Setters

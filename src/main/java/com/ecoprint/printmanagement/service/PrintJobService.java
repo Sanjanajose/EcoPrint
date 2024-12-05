@@ -151,6 +151,8 @@ public class PrintJobService {
     @Autowired
     private FailedJobService failedJobService;
 
+    
+    
 	
 
 	private final Tika tika = new Tika();
@@ -412,42 +414,94 @@ this.pushNotificationService = pushNotificationService;
 		}
 	}*/
 	
+	@Transactional
 	public void updateJobStatus(Long jobId, PrintJobStatus status, String comments) {
-	    // Retrieve the job with authorization check (only job owner or admin can access)
+	    // Retrieve the print job with authorization check
 	    PrintJob printJob = findJobIfAuthorized(jobId);
- 
+
 	    // Determine if the current user is an admin
 	    boolean isAdmin = hasRole("ROLE_ADMIN");
- 
-	    // Restrict status updates for regular users to specific actions
+
+	    // Get the current status of the print job
+	    PrintJobStatus currentStatus = printJob.getStatus();
+	    logger.info("Updating status for job ID: {}. Current status: {}, Target status: {}", jobId, currentStatus, status);
+
+	    // Restrict status updates for regular users to specific allowed actions
 	    if (!isAdmin && !isStatusAllowedForUser(status)) {
 	        throw new AccessDeniedException("Only admins can change the job status to " + status);
 	    }
- 
-	    // Save the current status as the previous status before updating
-	    PrintJobStatus previousStatus = printJob.getStatus();
- 
-	    // Enforce valid transitions based on the target status
-	    validateStatusTransition(previousStatus, status);
- 
-	    // Update the job's status and corresponding timestamp
+
+	    // Validate status transition
+	    validateStatusTransition(currentStatus, status);
+
+	    // Update the print job status and timestamps
+	    printJob.setStatus(status);
 	    updateJobTimestamps(printJob, status);
- 
+
+	    // Handle status-specific updates
+	    if (status == PrintJobStatus.QUEUED) {
+	        logger.debug("Setting queuedAt for job ID: {} to current time", jobId);
+	        printJob.setQueuedAt(LocalDateTime.now());
+	    } else {
+	        logger.debug("Clearing queue position for job ID: {} as status is no longer QUEUED", jobId);
+	        printJob.setQueuePosition(null);
+
+	        // Remove the job from the queued_jobs table
+	        queuedJobRepository.findById(jobId).ifPresent(queuedJob -> {
+	            queuedJobRepository.delete(queuedJob);
+	            logger.info("Removed job ID: {} from queued_jobs table", jobId);
+	        });
+
+	        // Recalculate queue positions for remaining jobs
+	        recalculateQueuePositions();
+	    }
+
 	    // Save the updated print job
-	    savePrintJob(printJob);
- 
-	    // Log job action with updated status and user info
-	    logJobAction(jobId, previousStatus, status, getCurrentUserId(), comments,
+	    printJobRepository.save(printJob);
+	    logger.info("Updated print job status to {} for job ID: {}", status, jobId);
+
+	    // Log the job status update action
+	    logJobAction(jobId, currentStatus, status, getCurrentUserId(), comments,
 	            Optional.ofNullable(printJob.getUser().getUsername()), Optional.empty(),
 	            Optional.empty(), "status_update", Optional.empty(), Optional.empty());
- 
+
 	    // Send notifications to job owner and admins
 	    sendStatusChangeNotifications(jobId, status, printJob);
-	    
-	    
-	    if (status == PrintJobStatus.QUEUED) {
-            queueManagementService.addJobToQueue(printJob);	    }
+
+	    logger.info("Completed status update for job ID: {}", jobId);
 	}
+
+
+	
+	@Transactional
+	public void recalculateQueuePositions() {
+	    logger.info("Recalculating queue positions for queued jobs.");
+
+	    // Fetch all jobs from queued_jobs ordered by their current queue position
+	    List<QueuedJob> queuedJobs = queuedJobRepository.findAllByOrderByQueuePosition();
+
+	    // Reassign queue positions starting from 1
+	    int newPosition = 1;
+	    for (QueuedJob queuedJob : queuedJobs) {
+	        queuedJob.setQueuePosition(newPosition);
+	        queuedJobRepository.save(queuedJob);
+
+	        // Synchronize the corresponding print job's queue position
+	        Long jobId = queuedJob.getJobId();
+	        PrintJob printJob = printJobRepository.findById(jobId)
+	                .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
+	        printJob.setQueuePosition(newPosition);
+	        printJobRepository.save(printJob);
+
+	        logger.info("Updated queue position to {} for job ID: {} in both tables.", newPosition, jobId);
+	        newPosition++;
+	    }
+
+	    logger.info("Queue positions recalculated successfully.");
+	}
+
+
+
 	
 	
 	public void addJobToQueue(PrintJob printJob) {
@@ -490,17 +544,17 @@ this.pushNotificationService = pushNotificationService;
 	private void validateStatusTransition(PrintJobStatus previousStatus, PrintJobStatus newStatus) {
 	    switch (newStatus) {
 	        case PAUSED:
-	            if (previousStatus != PrintJobStatus.READY || previousStatus != PrintJobStatus.QUEUED) {
+	            if (previousStatus != PrintJobStatus.READY && previousStatus != PrintJobStatus.QUEUED) {
 	                throw new IllegalStateException("Only jobs in PRINTING or QUEUED status can be paused.");
 	            }
 	            break;
 	        case READY:
-	            if (previousStatus != PrintJobStatus.PAUSED || previousStatus != PrintJobStatus.FAILED || previousStatus != PrintJobStatus.SUBMITTED ) {
+	            if (previousStatus != PrintJobStatus.PAUSED && previousStatus != PrintJobStatus.FAILED || previousStatus != PrintJobStatus.SUBMITTED ) {
 	                throw new IllegalStateException("Only paused jobs , failed jobs AND Submitted jobs can be marked as READY.");
 	            }
 	            break;
 	        case PRINTING:
-	            if (previousStatus != PrintJobStatus.READY || previousStatus != PrintJobStatus.QUEUED) {
+	            if (previousStatus != PrintJobStatus.READY && previousStatus != PrintJobStatus.QUEUED) {
 	                throw new IllegalStateException("Jobs must be in READY or QUEUED status to start printing.");
 	            }
 	            break;
@@ -630,37 +684,48 @@ this.pushNotificationService = pushNotificationService;
 		printJobRepository.save(printJob);
 	}
 
+	
+	
+	@Transactional
 	public void setJobPriority(Long jobId, Priority priority) {
-		// Get the current user ID
-		Long currentUserId = getCurrentUserId();
+	    // Fetch the PrintJob
+	    PrintJob printJob = printJobRepository.findById(jobId)
+	            .orElseThrow(() -> new ResourceNotFoundException("PrintJob", "id", jobId));
 
-		// Fetch the job, ensuring it's authorized for the current user
-		PrintJob job = findJobIfAuthorized(jobId);
+	    // Validate the priority
+	    if (priority == null) {
+	        throw new IllegalArgumentException("Priority cannot be null");
+	    }
 
-		// Retrieve the previous priority
-		Priority previousPriority = job.getPriority();
+	    // Update priority in PrintJob
+	    printJob.setPriority(priority);
 
-		// Check if priority is null before proceeding
-		if (priority == null) {
-			throw new IllegalArgumentException("Priority cannot be null");
-		}
+	    // Handle queue position for QUEUED jobs
+	    if (printJob.getStatus() == PrintJobStatus.QUEUED) {
+	        Integer queuePosition = queueManagementService.determineQueuePosition();
+	        printJob.setQueuePosition(queuePosition);
 
-		// Log the current and new priorities before updating
-		logger.debug("Job ID: {}, Previous Priority: {}, New Priority: {}", jobId, previousPriority, priority);
+	        // Update the QueuedJob entity
+	        QueuedJob queuedJob = queuedJobRepository.findById(jobId)
+	                .orElseThrow(() -> new ResourceNotFoundException("QueuedJob", "jobId", jobId));
+	        queuedJob.setJobPriority(priority);
+	        queuedJob.setQueuePosition(queuePosition);
+	        queuedJobRepository.save(queuedJob);
+	    } else {
+	        // Clear queue position if not QUEUED
+	        printJob.setQueuePosition(null);
+	        queuedJobRepository.findById(jobId).ifPresent(queuedJob -> {
+	            queuedJob.setQueuePosition(null);
+	            queuedJobRepository.save(queuedJob);
+	        });
+	    }
 
-		// Update the job's priority
-		job.setPriority(priority);
+	    // Save the updated PrintJob
+	    printJobRepository.save(printJob);
 
-		// Save the updated job
-		printJobRepository.save(job);
-
-		// Log the priority update action
-		logJobAction(jobId, job.getStatus(), job.getStatus(), currentUserId, "Job priority updated to " + priority,
-				Optional.of(job.getUserName()), // User who owns the print job
-				Optional.empty(), Optional.empty(), "priority_update", // Action type
-				Optional.of(priority.name()), // Updated priority
-				Optional.empty()); // No file size or name needed
+	    // Log the action (if required)
 	}
+
 /*
 	public void cancelJob(Long jobId) {
 		// Retrieve the job and ensure the user has authorization
@@ -1078,12 +1143,7 @@ job.setUploadTimestamp(LocalDateTime.now());
 
 	}
 
-	// Method to calculate the next available queue position
-	private int getNextQueuePosition() {
-		Integer maxPosition = printJobRepository.findMaxQueuePosition();
-		return (maxPosition == null ? 0 : maxPosition + 1);
-	}
-
+	
 	// Method to determine the priority of a job based on the user's roles
 	public int determinePriority(Long userId) {
 		List<Role> roles = roleRepository.findRolesByUserId(userId); // Fetch roles based on userId
@@ -1116,7 +1176,7 @@ job.setUploadTimestamp(LocalDateTime.now());
 		jobHistoryRepository.save(history);
 	}
 
-	@Transactional
+	/*@Transactional
 	public void reorderJob(Long jobId, int newPosition) {
 		// Retrieve the job with authorization check
 		PrintJob job = findJobIfAuthorized(jobId);
@@ -1167,7 +1227,54 @@ job.setUploadTimestamp(LocalDateTime.now());
 
 		// Log the queue position change
 		logQueuePositionChange(jobId, previousPosition, newPosition, currentUserId, "Job reordered in the queue");
+	}*/
+	
+	
+	@Transactional
+	public void reorderJob(Long jobId, int newPosition) {
+	    // Retrieve the print job with authorization check
+	    PrintJob job = findJobIfAuthorized(jobId);
+
+	    // Check if the job is in QUEUED status
+	    if (job.getStatus() != PrintJobStatus.QUEUED) {
+	        throw new IllegalStateException("Only jobs with status QUEUED can be reordered.");
+	    }
+
+	    // Get the current position of the job
+	    int currentPosition = job.getQueuePosition();
+
+	    // Validate the new position
+	    if (newPosition == currentPosition) {
+	        logger.info("Job ID {} is already at the requested position {}", jobId, newPosition);
+	        return;
+	    }
+
+	    logger.info("Reordering Job ID {} from position {} to {}", jobId, currentPosition, newPosition);
+
+	    // Adjust positions of other jobs in print_jobs table
+	    adjustQueuePositionsInPrintJobs(job, newPosition);
+
+	    // Adjust positions of other jobs in queued_jobs table
+	    adjustQueuePositionsInQueuedJobs(job, newPosition);
+
+	    // Update the job's position in both tables
+	    job.setQueuePosition(newPosition);
+	    printJobRepository.save(job);
+
+	    queuedJobRepository.findById(jobId).ifPresent(queuedJob -> {
+	        queuedJob.setQueuePosition(newPosition);
+	        queuedJobRepository.save(queuedJob);
+	    });
+
+	    // Log the action for history and notifications
+	    logQueuePositionChange(jobId, currentPosition, newPosition, getCurrentUserId(), "Job reordered in the queue");
+	    notifyJobReorder(jobId, getCurrentUserId(), newPosition);
+
+	    logger.info("Successfully reordered Job ID {} to position {}", jobId, newPosition);
 	}
+
+
+
 	
 	public void notifyJobReorder(Long jobId, Long reorderedByUserId, int newPosition) {
 	    PrintJob job = printJobRepository.findById(jobId)
@@ -1207,13 +1314,16 @@ job.setUploadTimestamp(LocalDateTime.now());
 	        pushNotificationService.sendPushNotification(admin.getId(), "Print Job Reordered", messageForAdmin);
 	    });
 	}
+	
+	
+	
 
 
 	
 	
 	
 
-	private void adjustQueuePositions(PrintJob job, int newPosition) {
+	private void adjustQueuePositionsInPrintJobs(PrintJob job, int newPosition) {
 		int oldPosition = job.getQueuePosition();
 
 		if (newPosition > oldPosition) {
@@ -1233,6 +1343,28 @@ job.setUploadTimestamp(LocalDateTime.now());
 			printJobRepository.saveAll(jobsToShiftDown);
 		}
 	}
+	
+	
+	private void adjustQueuePositionsInQueuedJobs(PrintJob job, int newPosition) {
+	    int currentPosition = job.getQueuePosition();
+
+	    if (newPosition > currentPosition) {
+	        // Move the job down in the queue - shift jobs up by 1
+	        List<QueuedJob> jobsToShiftUp = queuedJobRepository.findByQueuePositionBetween(currentPosition + 1, newPosition);
+	        for (QueuedJob queuedJob : jobsToShiftUp) {
+	            queuedJob.setQueuePosition(queuedJob.getQueuePosition() - 1);
+	        }
+	        queuedJobRepository.saveAll(jobsToShiftUp);
+	    } else if (newPosition < currentPosition) {
+	        // Move the job up in the queue - shift jobs down by 1
+	        List<QueuedJob> jobsToShiftDown = queuedJobRepository.findByQueuePositionBetween(newPosition, currentPosition - 1);
+	        for (QueuedJob queuedJob : jobsToShiftDown) {
+	            queuedJob.setQueuePosition(queuedJob.getQueuePosition() + 1);
+	        }
+	        queuedJobRepository.saveAll(jobsToShiftDown);
+	    }
+	}
+
 
 	public void removeJob(Long jobId) {
 		PrintJob printJob = findJobIfAuthorized(jobId);

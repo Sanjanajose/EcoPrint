@@ -15,7 +15,7 @@ public class QueuedJobDTO {
     private LocalDateTime uploadTimestamp; // Timestamp when the file was uploaded
     private LocalDateTime submissionTimestamp; // Timestamp when the job was submitted
     private String jobPriority; // Priority of the job (LOW, MEDIUM, HIGH, URGENT)
-    private int queuePosition; // Position in the queue
+    private Integer queuePosition; // Position in the queue
     private String status; // Status of the job (e.g., QUEUED, PRINTING, COMPLETED)
     
     // Getters and Setters
@@ -63,7 +63,7 @@ public class QueuedJobDTO {
         return pagesPrinted;
     }
 
-    public void setPagesPrinted(int numPages) {
+    public void setPagesPrinted(int pagesPrinted) {
         this.pagesPrinted = pagesPrinted;
     }
 
@@ -100,11 +100,11 @@ public class QueuedJobDTO {
         this.jobPriority = jobPriority;
     }
 
-    public int getQueuePosition() {
+    public Integer getQueuePosition() {
         return queuePosition;
     }
 
-    public void setQueuePosition(int queuePosition) {
+    public void setQueuePosition(Integer queuePosition) {
         this.queuePosition = queuePosition;
     }
 

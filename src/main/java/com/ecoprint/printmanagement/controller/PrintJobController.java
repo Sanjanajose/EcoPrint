@@ -172,7 +172,7 @@ public class PrintJobController {
     public ResponseEntity<String> updateJobStatus(@PathVariable Long jobId,
                                                   @RequestParam("status") PrintJobStatus status) {
         logger.info("Received request to update status for job ID: {}, New Status: {}", jobId, status);
-
+ 
         try {
             printJobService.updateJobStatus(jobId, status, "Status updated to " + status.name());
             logger.info("Job status updated successfully for ID: {}", jobId);
@@ -181,11 +181,14 @@ public class PrintJobController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Print job not found");
         } catch (Exception e) {
             logger.error("Unexpected error while updating job status for ID: {}", jobId, e);
+ 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while updating job status.");
         }
-
+ 
         return ResponseEntity.ok("Print job status updated to " + status);
     }
+ 
+
 
     
     
@@ -205,7 +208,7 @@ public class PrintJobController {
     @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     @Operation(summary = "Pause print job", description = "Allows a user or admin to pause a print job.")
     public ResponseEntity<String> pauseJob(@PathVariable Long jobId ) {
-        return updateJobStatus(jobId, PrintJobStatus.PAUSED);
+    	return updateJobStatus(jobId, PrintJobStatus.PAUSED);
     }
 
     @PutMapping("/{jobId}/cancel")
@@ -291,22 +294,36 @@ public class PrintJobController {
     
     @PutMapping("/set-priority/{jobId}")
     @PreAuthorize("hasRole('ROLE_ADMIN') or @printJobService.isOwner(#jobId, authentication.name)")
-    @Operation(summary = "allows to set the priority of the print jobs ", description = "allows job owner or admin to set the priority of print job")
-    public ResponseEntity<String> setJobPriority(@PathVariable Long jobId, @org.springframework.web.bind.annotation.RequestBody Priority priority) {
+    @Operation(summary = "Set priority of the print jobs", description = "Allows job owner or admin to set the priority of a print job")
+    public ResponseEntity<String> setJobPriority(
+            @PathVariable Long jobId,
+            @RequestBody Priority priority) {
+
         if (priority == null) {
             return ResponseEntity.badRequest().body("Priority cannot be null");
         }
 
         // Log the received priority
-        System.out.println("Received priority: " + priority);
+        System.out.println("Setting priority for jobId: " + jobId + " to " + priority);
 
         try {
+            // Call the service method to update priority
             printJobService.setJobPriority(jobId, priority);
             return ResponseEntity.ok("Print job priority updated successfully");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating job priority");
+        } catch (ResourceNotFoundException ex) {
+            // Handle case where the job does not exist
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job not found: " + ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            // Handle validation issues
+            return ResponseEntity.badRequest().body("Invalid request: " + ex.getMessage());
+        } catch (Exception ex) {
+            // Catch any other unexpected errors
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while updating the priority");
         }
     }
+
+    
+
 
 
 
