@@ -29,6 +29,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -442,8 +443,16 @@ this.pushNotificationService = pushNotificationService;
 	    if (status == PrintJobStatus.QUEUED) {
 	        logger.debug("Setting queuedAt for job ID: {} to current time", jobId);
 	        printJob.setQueuedAt(LocalDateTime.now());
+	    } else if (status == PrintJobStatus.PAUSED) {
+	        logger.debug("Retaining job ID: {} in queued_jobs table as status is PAUSED", jobId);
+	        // Retain the job in queued_jobs without clearing the queue position
+	        queuedJobRepository.findById(jobId).ifPresent(queuedJob -> {
+	            queuedJob.setStatus(PrintJobStatus.PAUSED);
+	            queuedJobRepository.save(queuedJob);
+	            logger.info("Updated job ID: {} in queued_jobs table with status PAUSED", jobId);
+	        });
 	    } else {
-	        logger.debug("Clearing queue position for job ID: {} as status is no longer QUEUED", jobId);
+	        logger.debug("Clearing queue position for job ID: {} as status is no longer QUEUED or PAUSED", jobId);
 	        printJob.setQueuePosition(null);
 
 	        // Remove the job from the queued_jobs table
@@ -752,7 +761,7 @@ this.pushNotificationService = pushNotificationService;
 	}
 */
 	
-	public void cancelJob(Long jobId) {
+	/*public void cancelJob(Long jobId) {
 	    // Retrieve the job with authorization check
 	    PrintJob printJob = findJobIfAuthorized(jobId);
 
@@ -789,6 +798,130 @@ this.pushNotificationService = pushNotificationService;
 	    
 	    
 	    saveFailedJob(failedJob); // Method to save failed job in FailedJob table
+	}*/
+	
+	
+	@Transactional
+	public void cancelJob(Long jobId) {
+	    // Retrieve the job with authorization check
+	    PrintJob printJob = findJobIfAuthorized(jobId);
+
+	    // Ensure only jobs that are not COMPLETED or DELETED can be canceled
+	    if (printJob.getStatus() == PrintJobStatus.COMPLETED || printJob.getStatus() == PrintJobStatus.DELETED) {
+	        throw new IllegalStateException("Cannot cancel a job that is already completed or deleted.");
+	    }
+
+	    // Capture the previous status for logging
+	    PrintJobStatus previousStatus = printJob.getStatus();
+
+	    // Update the job's status to CANCELED
+	    printJob.setStatus(PrintJobStatus.FAILED);
+	    printJob.setFailedAt(LocalDateTime.now());
+
+	    // Clear the queue position
+	    printJob.setQueuePosition(null);
+	    savePrintJob(printJob); // Save the updated job
+
+	    // Remove the job from the queue_jobs table
+	    removeFromQueueJobs(printJob);
+
+	    // Log the cancellation action
+	    Long currentUserId = getCurrentUserId();
+	    String actionPerformedBy = isAdmin(currentUserId) ? "Admin" : "User";
+	    logJobAction(jobId, previousStatus, PrintJobStatus.FAILED, currentUserId,
+	                 "Job canceled by " + actionPerformedBy,
+	                 Optional.ofNullable(printJob.getUserName()),
+	                 Optional.empty(),
+	                 Optional.empty(),
+	                 "cancel_job",
+	                 Optional.empty(),
+	                 Optional.empty());
+
+	    // Save the canceled job into the FailedJob table
+	    FailedJob failedJob = new FailedJob();
+	    failedJob.setFailedAt(LocalDateTime.now());
+	    failedJob.setErrorDetails("Job canceled by " + actionPerformedBy);
+	    failedJob.setFailedBy(currentUserId != null ? currentUserId.toString() : "Unknown User");
+	    failedJob.setRetryCount(0);
+	    failedJob.setPrintJob(printJob);
+	    failedJob.setPrinter(printJob.getPrinter());
+	    saveFailedJob(failedJob);
+
+	    // Update the queue to adjust positions
+	    updateQueuePositions(printJob.getPrinter());
+	}
+
+
+
+	@Transactional
+	private void removeFromQueueJobs(PrintJob printJob) {
+	    // Remove the job from the queue_jobs table
+		queuedJobRepository.deleteByPrintJobId(printJob.getId());
+	}
+
+	
+	
+	@Transactional
+	public void updateQueuePositions(Printer printer) {
+	    // Update queue positions in the print_jobs table
+	    List<PrintJob> printJobs = printJobRepository.findByPrinterAndQueuePositionNotNullOrderByQueuePositionAsc(printer);
+
+	    int position = 1;
+	    for (PrintJob job : printJobs) {
+	        job.setQueuePosition(position++);
+	        printJobRepository.save(job); // Persist the updated position
+	    }
+
+	    // Update queue positions in the queued_jobs table using printerId
+	    Long printerId = printer.getId(); // Get the printer ID
+	    List<QueuedJob> queuedJobs = queuedJobRepository.findByPrinterIdOrderByQueuePositionAsc(printerId);
+
+	    position = 1; // Reset position counter for queued_jobs
+	    for (QueuedJob job : queuedJobs) {
+	        job.setQueuePosition(position++);
+	        queuedJobRepository.save(job); // Persist the updated position
+	    }
+
+	    logQueuePositionUpdate(printer, printJobs, queuedJobs); // Log the update
+	}
+
+	private void logQueuePositionUpdate(Printer printer, List<PrintJob> printJobs, List<QueuedJob> queuedJobs) {
+	    logger.info("Queue positions updated for printer: {}", printer.getId());
+
+	    logger.info("Updated positions in print_jobs:");
+	    for (PrintJob job : printJobs) {
+	        logger.info("Job ID: {}, New Position: {}", job.getId(), job.getQueuePosition());
+	    }
+
+	    logger.info("Updated positions in queued_jobs:");
+	    for (QueuedJob job : queuedJobs) {
+	        logger.info("Job ID: {}, New Position: {}", job.getJobId(), job.getQueuePosition());
+	    }
+	}
+	
+	
+
+
+
+
+
+	private boolean isAdmin(Long userId) {
+	    // Check if the current user has ADMIN or SUPERADMIN roles
+	    return getCurrentUserRoles().stream()
+	            .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ROLE_SUPERADMIN"));
+	}
+
+
+	
+	private List<String> getCurrentUserRoles() {
+	    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+	    if (authentication == null || !authentication.isAuthenticated()) {
+	        throw new AccessDeniedException("User is not authenticated");
+	    }
+
+	    return authentication.getAuthorities().stream()
+	            .map(GrantedAuthority::getAuthority)
+	            .collect(Collectors.toList());
 	}
 
 	
@@ -837,7 +970,7 @@ this.pushNotificationService = pushNotificationService;
 	    failedJobRepository.save(failedJob);
 	}
 
-	public void pauseJob(Long jobId) {
+	/*public void pauseJob(Long jobId) {
 		PrintJob job = getJob(jobId);
 
 		// Check if the job is in a status that allows pausing
@@ -903,7 +1036,6 @@ this.pushNotificationService = pushNotificationService;
 				Optional.empty() // No file size involved
 		);
 	}
-
 	/**
 	 * public void logJobAction(Long jobId, PrintJobStatus previousStatus,
 	 * PrintJobStatus updatedStatus, Long userId, String comments, Optional<String>
@@ -916,6 +1048,107 @@ this.pushNotificationService = pushNotificationService;
 	 * jobHistoryRepository.save(history); // Save the log entry }
 	 **/
 
+	
+	
+	
+	@Transactional
+	public void pauseJob(Long jobId) {
+	    // Retrieve the job from print_jobs
+	    PrintJob job = getJob(jobId);
+
+	    // Check if the job is in a status that allows pausing
+	    if (job.getStatus() == PrintJobStatus.PRINTING || job.getStatus() == PrintJobStatus.QUEUED) {
+	        // Capture the previous status
+	        PrintJobStatus previousStatus = job.getStatus();
+
+	        // Update the job status to PAUSED in print_jobs
+	        job.setStatus(PrintJobStatus.PAUSED);
+	        job.setPausedAt(LocalDateTime.now());
+	        printJobRepository.save(job);
+
+	        // Update the job status in queued_jobs
+	        QueuedJob queuedJob = queuedJobRepository.findById(jobId)
+	                .orElseThrow(() -> new ResourceNotFoundException("QueuedJob", "id", jobId));
+	        queuedJob.setQueuePosition(null); // Optional: Remove queue position if needed
+	        queuedJob.setStatus(PrintJobStatus.PAUSED);
+	        queuedJobRepository.save(queuedJob);
+
+	        // Log the action
+	        Long currentUserId = getCurrentUserId();
+	        logJobAction(jobId,
+	                previousStatus,
+	                PrintJobStatus.PAUSED,
+	                currentUserId,
+	                "Job paused by user",
+	                Optional.ofNullable(job.getUserName()),
+	                Optional.empty(),
+	                Optional.empty(),
+	                "pause",
+	                Optional.empty(),
+	                Optional.empty()
+	        );
+
+	        
+	    } else {
+	        throw new IllegalStateException("Job can only be paused if it is in PRINTING or QUEUED status.");
+	    }
+	}
+
+	@Transactional
+	public void resumeJob(Long jobId) {
+	    // Retrieve the job from print_jobs
+	    PrintJob job = findJobIfAuthorized(jobId);
+
+	    // Ensure the job is currently paused before resuming
+	    if (job.getStatus() != PrintJobStatus.PAUSED) {
+	        throw new IllegalStateException("Only paused jobs can be resumed.");
+	    }
+
+	    // Capture the previous status
+	    PrintJobStatus previousStatus = job.getStatus();
+
+	    // Update the job status to QUEUED in print_jobs
+	    job.setStatus(PrintJobStatus.QUEUED);
+	    printJobRepository.save(job);
+
+	    // Retrieve the queued job and update it
+	    QueuedJob queuedJob = queuedJobRepository.findById(jobId)
+	            .orElseThrow(() -> new ResourceNotFoundException("QueuedJob", "id", jobId));
+
+	    // Calculate a new queue position based on printerId
+	    Integer newQueuePosition = calculateNewQueuePosition(job.getPrinterId()); // Use printerId instead of a Printer object
+	    queuedJob.setQueuePosition(newQueuePosition); // Assign a new queue position
+	    queuedJob.setStatus(PrintJobStatus.QUEUED);
+	    queuedJobRepository.save(queuedJob);
+
+	    // Log the action
+	    Long currentUserId = getCurrentUserId();
+	    logJobAction(jobId,
+	            previousStatus,
+	            PrintJobStatus.QUEUED,
+	            currentUserId,
+	            "Job resumed by user",
+	            Optional.ofNullable(job.getUserName()), // Include userName if available
+	            Optional.empty(),
+	            Optional.of(newQueuePosition), // Log the new position
+	            "resume",
+	            Optional.empty(),
+	            Optional.empty()
+	    );
+	}
+
+	
+	
+	
+
+
+	private Integer calculateNewQueuePosition(Long printerId) {
+	    Integer maxPosition = queuedJobRepository.findMaxQueuePositionByPrinter(printerId);
+	    return maxPosition != null ? maxPosition + 1 : 1;
+	}
+
+
+	
 	public void logJobAction(Long jobId, PrintJobStatus previousStatus, PrintJobStatus updatedStatus, Long userId,
 			String comments, Optional<String> userName, Optional<Integer> previousPosition,
 			Optional<Integer> newPosition, String actionType, Optional<String> fileName, Optional<Long> fileSize) {
@@ -974,7 +1207,7 @@ this.pushNotificationService = pushNotificationService;
 		List<JobHistory> jobs = null;
 
 		// Filter by updatedStatus if status is provided
-		if (status != null) {
+    	if (status != null) {
 			jobs = jobHistoryRepository.findByUpdatedStatus(status);
 		}
 		// Filter by userName if provided

@@ -20,6 +20,8 @@ public class QueuedJob {
     @Column(nullable = false)
     private Long printerId; // Foreign key referencing printer
 
+    
+    
     @Column(nullable = false)
     private int pagesPrinted; // Total pages in the document
 

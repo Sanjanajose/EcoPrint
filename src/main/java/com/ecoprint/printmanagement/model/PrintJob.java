@@ -366,5 +366,8 @@ public class PrintJob {
     }
 	    
  
+    public Long getPrinterId() {
+        return printer != null ? printer.getId() : null;
+    }
 
 }

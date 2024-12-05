@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import com.ecoprint.printmanagement.model.PrintJob;
 import com.ecoprint.printmanagement.model.PrintJobStatus;
+import com.ecoprint.printmanagement.model.Printer;
 import com.ecoprint.printmanagement.model.User;
 
 public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
@@ -76,4 +77,10 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, Long> {
     
     @Query(value = "SELECT 1 FROM print_jobs j INNER JOIN users u ON j.user_id=u.user_id WHERE u.email = :userName AND j.id = :jobId",nativeQuery = true)
     Long existsByIdAndUser_Username(@Param("jobId") Long jobId, @Param("userName") String userName);
+    
+    
+    List<PrintJob> findByPrinterAndStatusOrderByQueuePositionAsc(Printer printer, PrintJobStatus status);
+    
+    List<PrintJob> findByPrinterAndQueuePositionNotNullOrderByQueuePositionAsc(Printer printer);
+
 }
