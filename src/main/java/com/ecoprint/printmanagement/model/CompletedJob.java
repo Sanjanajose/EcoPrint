@@ -38,7 +38,8 @@ public class CompletedJob {
 
     @Column(name = "submitted_at", nullable = false)
     private LocalDateTime submittedAt;
-
+    
+ 
 
     public String getPrinterName() {
 		return printerName;

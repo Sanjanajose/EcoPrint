@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.ecoprint.printmanagement.model.Printer;
@@ -30,4 +32,7 @@ public interface PrinterRepository  extends JpaRepository<Printer, Long>{
     // Custom query example (if needed)
     // Find printers that are online and located in a specific location
     List<Printer> findByStatusAndLocation(String status, String location);
+    
+   
+
 }

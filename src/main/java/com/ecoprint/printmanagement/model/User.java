@@ -61,8 +61,6 @@ public class User extends DateAudit {
     private Long id;
     
     
-   
-    
     @OneToOne(mappedBy = "user")
     private UserNotificationPreferences notificationPreferences;
 

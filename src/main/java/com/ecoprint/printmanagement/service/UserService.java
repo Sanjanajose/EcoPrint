@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.Principal;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -40,6 +41,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.ecoprint.printmanagement.annotation.CurrentUser;
 import com.ecoprint.printmanagement.config.RolePermissionMapping;
+import com.ecoprint.printmanagement.dto.UserDTO;
 import com.ecoprint.printmanagement.exception.FileUploadException;
 import com.ecoprint.printmanagement.exception.ResourceAlreadyInUseException;
 import com.ecoprint.printmanagement.exception.ResourceNotFoundException;
@@ -127,6 +129,12 @@ public class UserService {
 	public Boolean existsByUsername(String username) {
 		return userRepository.existsByUsername(username);
 	}
+	
+	
+	 public User getCurrentUser(Long userId) {
+	        return userRepository.findById(userId)
+	                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+	    }
 
 	public User createUser(RegistrationRequest registerRequest, MultipartFile profilePicture) {
 		// Check for existing email and username
@@ -548,8 +556,11 @@ public class UserService {
 	
 	
 	
-
-	
+	public UserDTO getUserById(Long userId) {
+	    User user = userRepository.findById(userId)
+	            .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+	    return new UserDTO(user.getId(), user.getUsername());
+	}
 
 
 }
