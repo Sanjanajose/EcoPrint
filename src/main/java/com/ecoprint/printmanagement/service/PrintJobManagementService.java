@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import javax.annotation.PostConstruct;
+
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,15 @@ public class PrintJobManagementService {
     private final ConcurrentHashMap<Long, String> activeJobs = new ConcurrentHashMap<>();
     private final Map<Long, PrintProcess> printProcessStorage = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, JobProgress> jobProgress = new ConcurrentHashMap<>();
+
+    
+    @PostConstruct
+    public void initializeJobIdGenerator() {
+        // Initialize the jobIdGenerator with the maximum jobId from the database
+        long maxJobId = printJobManagementRepository.findMaxJobId().orElse(0L);
+        jobIdGenerator.set(maxJobId + 1);
+        System.out.println("Job ID Generator initialized to start from: " + jobIdGenerator.get());
+    }
 
 
     /**
@@ -71,7 +82,55 @@ public class PrintJobManagementService {
         return jobId;
     }   */
     
+    /*IT WAS WORKING BEFORE 3.10
+    public List<Long> startJobsForMultipleFiles(
+            String printerIp, int printerPort, List<InputStream> fileDataList, List<String> fileNames) throws Exception {
+
+        if (fileDataList.size() != fileNames.size()) {
+            throw new IllegalArgumentException("Mismatch between file data and file names count.");
+        }
+
+        List<Long> jobIds = new ArrayList<>();
+        for (int i = 0; i < fileDataList.size(); i++) {
+            InputStream fileData = fileDataList.get(i);
+            String fileName = fileNames.get(i);
+
+            // Create and initialize a PrintEvent for this file
+            long jobId = jobIdGenerator.incrementAndGet();
+            PrintEvent printEvent = new PrintEvent();
+            printEvent.setJobId(jobId);
+            printEvent.setFileName(fileName);
+            printEvent.setPrinterIp(printerIp);
+            printEvent.setStatus("PRINTING");
+            printEvent.setCreatedAt(new Date());
+            printEvent.setLastUpdated(LocalDateTime.now());
+            printEvent.setTotalPages(100); // Example default total pages
+            printJobManagementRepository.save(printEvent);
+
+            try {
+                // Delegate to the startJob method
+                startJob(printerIp, printerPort, fileData, fileName);
+                activeJobs.put(jobId, "COMPLETED");
+                printEvent.setStatus("COMPLETED");
+                jobIds.add(jobId);
+            } catch (Exception e) {
+                // Log error and update the status to FAILED
+                System.err.println("Failed to start job for file: " + fileName + ". Error: " + e.getMessage());
+                activeJobs.put(jobId, "FAILED");
+                printEvent.setStatus("FAILED");
+                jobIds.add(-1L); // Indicate failure for this file
+            } finally {
+                // Save the final status of the PrintEvent
+                printEvent.setLastUpdated(LocalDateTime.now());
+                printJobManagementRepository.save(printEvent);
+            }
+        }
+
+        return jobIds;
+    }
+    */
     
+   /* 
     public long startJob(String printerIp, int printerPort, InputStream fileData, String fileName) throws Exception {
         long jobId = jobIdGenerator.incrementAndGet();
         int totalPages = 100; // Replace with logic to calculate total pages
@@ -118,21 +177,184 @@ public class PrintJobManagementService {
 
         return jobId;
     }
+*/
     
+    public List<Long> startJobsForMultipleFiles(
+            String printerIp, int printerPort, List<InputStream> fileDataList, List<String> fileNames, Integer tray) throws Exception {
+
+        if (fileDataList.size() != fileNames.size()) {
+            throw new IllegalArgumentException("Mismatch between file data and file names count.");
+        }
+
+        List<Long> jobIds = new ArrayList<>();
+        for (int i = 0; i < fileDataList.size(); i++) {
+            InputStream fileData = fileDataList.get(i);
+            String fileName = fileNames.get(i);
+
+            // Pass tray info to startJob
+            long jobId = -1L;
+            try {
+                jobId = startJob(printerIp, printerPort, fileData, fileName, tray);
+                jobIds.add(jobId);
+            } catch (Exception e) {
+               // logger.error("Failed to process file: {}. Error: {}", fileName, e.getMessage(), e);
+                jobIds.add(-1L); // Indicate failure for this file
+            }
+        }
+
+        return jobIds;
+    }
+
+    /* IT WAS WORKING BEFORE 3.10
+    public long startJob(String printerIp, int printerPort, InputStream fileData, String fileName) throws Exception {
+        long jobId = jobIdGenerator.incrementAndGet();
+        activeJobs.put(jobId, "PRINTING");
+
+        // Create and save initial PrintEvent
+        PrintEvent printEvent = new PrintEvent();
+        printEvent.setJobId(jobId);
+        printEvent.setCompletedPages(0);
+        printEvent.setTotalPages(0); // Set default, as this is no longer needed
+        printEvent.setProgressPercentage(0.0);
+        printEvent.setFileName(fileName);
+        printEvent.setStatus("PRINTING");
+        printEvent.setCreatedAt(new Date());
+        printEvent.setLastUpdated(LocalDateTime.now());
+        printEvent.setPrinterIp(printerIp);
+        printJobManagementRepository.save(printEvent);
+
+        try (Socket socket = new Socket(printerIp, printerPort);
+             OutputStream outputStream = socket.getOutputStream()) {
+
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            int totalBytes = 0; // Total bytes processed to simulate progress
+
+            while ((bytesRead = fileData.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+
+                // Increment processed bytes
+                totalBytes += bytesRead;
+
+                // Simulate one page printed per chunk
+                int completedPages = totalBytes / 1024; // Example: Assume 1KB equals 1 page
+                printEvent.setCompletedPages(completedPages);
+
+                // Update progress percentage dynamically
+                printEvent.setProgressPercentage(100.0 * totalBytes / fileData.available());
+
+                // Update last updated timestamp and save progress
+                printEvent.setLastUpdated(LocalDateTime.now());
+                printJobManagementRepository.save(printEvent);
+
+                // Simulate delay to mimic printing
+                Thread.sleep(50); // Adjust this as needed to simulate time per page
+            }
+
+            // Mark the job as completed
+            activeJobs.put(jobId, "COMPLETED");
+            printEvent.setStatus("COMPLETED");
+            printEvent.setProgressPercentage(100.0); // Ensure progress is 100%
+        } catch (Exception e) {
+            // Handle job failure
+            activeJobs.put(jobId, "FAILED");
+            printEvent.setStatus("FAILED");
+            printEvent.setProgressPercentage(0.0);
+            printEvent.setLastUpdated(LocalDateTime.now());
+            printJobManagementRepository.save(printEvent);
+            throw new Exception("Failed to send print job to the printer: " + e.getMessage(), e);
+        } finally {
+            // Save the final status in case of success or failure
+            printJobManagementRepository.save(printEvent);
+        }
+
+        return jobId;
+    }*/
     
-    
+    public long startJob(String printerIp, int printerPort, InputStream fileData, String fileName, Integer tray) throws Exception {
+        long jobId = jobIdGenerator.incrementAndGet(); // Ensure unique ID for every job
+        activeJobs.put(jobId, "PRINTING");
+
+        // Create and save initial PrintEvent
+        PrintEvent printEvent = new PrintEvent();
+        printEvent.setJobId(jobId);
+        printEvent.setFileName(fileName);
+        printEvent.setPrinterIp(printerIp);
+        printEvent.setStatus("PRINTING");
+        printEvent.setCreatedAt(new Date());
+        printEvent.setLastUpdated(LocalDateTime.now());
+        printEvent.setProgressPercentage(0.0);
+       /* if (tray != null) {
+            printEvent.setPrinterTray(tray); // Add tray info if provided
+        }*/
+        printJobManagementRepository.save(printEvent);
+
+        try (Socket socket = new Socket(printerIp, printerPort);
+             OutputStream outputStream = socket.getOutputStream()) {
+
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            int totalBytes = 0; // Total bytes processed to simulate progress
+            long fileSize = fileData.available(); // Get total file size for progress calculation
+
+            while ((bytesRead = fileData.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+
+                // Increment processed bytes
+                totalBytes += bytesRead;
+
+                // Simulate progress
+                int completedPages = totalBytes / 1024; // Example: Assume 1KB equals 1 page
+                printEvent.setCompletedPages(completedPages);
+
+                // Update progress percentage dynamically
+                double progressPercentage = (double) totalBytes / fileSize * 100;
+                printEvent.setProgressPercentage(Math.min(progressPercentage, 100.0)); // Cap at 100%
+
+                // Update last updated timestamp and save progress
+                printEvent.setLastUpdated(LocalDateTime.now());
+                printJobManagementRepository.save(printEvent);
+
+                // Simulate delay to mimic printing
+                Thread.sleep(50); // Adjust as needed
+            }
+
+            // Mark the job as completed
+            activeJobs.put(jobId, "COMPLETED");
+            printEvent.setStatus("COMPLETED");
+            printEvent.setProgressPercentage(100.0); // Ensure progress is 100%
+        } catch (Exception e) {
+            // Handle job failure
+            activeJobs.put(jobId, "FAILED");
+            printEvent.setStatus("FAILED");
+            printEvent.setProgressPercentage(0.0);
+            printEvent.setLastUpdated(LocalDateTime.now());
+            printJobManagementRepository.save(printEvent);
+            throw new Exception("Failed to send print job to the printer: " + e.getMessage(), e);
+        } finally {
+            // Save the final status in case of success or failure
+            printJobManagementRepository.save(printEvent);
+        }
+
+        return jobId;
+    }
+
     
     public Map<String, Object> getJobProgress(long jobId) {
-        JobProgress progress = jobProgress.get(jobId);
-        if (progress == null) { 
-            throw new IllegalArgumentException("No progress found for job ID: " + jobId);
-        }
+        // Fetch the PrintEvent for the given jobId
+        PrintEvent printEvent = printJobManagementRepository.findById(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("No progress found for job ID: " + jobId));
+
+        // Dynamically calculate progressPercentage if status is "COMPLETED"
+        double progressPercentage = printEvent.getStatus().equalsIgnoreCase("COMPLETED") ? 100.0 : printEvent.getProgressPercentage();
+
+        // Build the progress details
         Map<String, Object> progressDetails = new HashMap<>();
-        progressDetails.put("jobId", progress.getJobId());
-        progressDetails.put("completedPages", progress.getCompletedPages());
-        progressDetails.put("totalPages", progress.getTotalPages());
-        progressDetails.put("progressPercentage", progress.getProgressPercentage());
-        progressDetails.put("estimatedTimeRemaining", progress.getEstimatedTimeRemaining());
+        progressDetails.put("jobId", printEvent.getJobId());
+       // progressDetails.put("completedPages", printEvent.getCompletedPages());
+        progressDetails.put("progressPercentage", progressPercentage);
+        progressDetails.put("estimatedTimeRemaining", printEvent.getEstimatedTimeRemaining() != null ? printEvent.getEstimatedTimeRemaining() : "N/A");
+
         return progressDetails;
     }
 

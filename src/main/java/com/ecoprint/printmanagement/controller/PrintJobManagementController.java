@@ -1,8 +1,12 @@
 package com.ecoprint.printmanagement.controller;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import com.ecoprint.printmanagement.model.JobStatus;
 import com.ecoprint.printmanagement.model.PrintEvent;
@@ -22,6 +26,26 @@ import com.ecoprint.printmanagement.model.PrintProcess;
 import com.ecoprint.printmanagement.repository.PrintJobManagementRepository;
 import com.ecoprint.printmanagement.request.PrintEventRequest;
 import com.ecoprint.printmanagement.service.PrintJobManagementService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.snmp4j.CommunityTarget;
+import org.snmp4j.PDU;
+import org.snmp4j.Snmp;
+import org.snmp4j.TransportMapping;
+import org.snmp4j.event.ResponseEvent;
+import org.snmp4j.mp.SnmpConstants;
+import org.snmp4j.smi.*;
+import org.snmp4j.transport.DefaultUdpTransportMapping;
+
 
 
 @RestController
@@ -35,20 +59,128 @@ public class PrintJobManagementController {
 	@Autowired	
     private PrintJobManagementRepository printJobManagementRepository;
 
-    @PostMapping("/file")
-    public String sendPrintJob(@RequestParam String printerIp,
-                               @RequestParam(defaultValue = "9100") int printerPort,
-                               @RequestParam MultipartFile file) {
-        try {
-            long jobId = printJobManagementService.startJob(printerIp, printerPort, file.getInputStream(), file.getOriginalFilename());
-            return "Print job sent successfully! Job ID: " + jobId;
-        } catch (Exception e) {
-            return "Error sending print job: " + e.getMessage();
+	@PostMapping("/file")
+	public String sendPrintJobs(        @RequestParam String printerIp,
+	        @RequestParam(defaultValue = "9100") int printerPort,
+	        @RequestParam MultipartFile[] files,
+	        @RequestParam(required = false) Integer defaultTray // Optional tray parameter
+	) {
+	    try {
+	        // Fetch available tray if not provided
+	       // logger.debug("Fetching available trays...");
+	        Integer availableTray = getAvailableTray(printerIp, defaultTray);
+	       // logger.debug("Tray selected: {}", availableTray);
+
+	        List<InputStream> fileDataList = Arrays.stream(files)
+	                .map(file -> {
+	                    try {
+	                        return file.getInputStream();
+	                    } catch (IOException e) {
+	                        throw new RuntimeException(e);
+	                    }
+	                }).collect(Collectors.toList());
+	        List<String> fileNames = Arrays.stream(files)
+	                .map(MultipartFile::getOriginalFilename)
+	                .collect(Collectors.toList());
+
+	        List<Long> jobIds = printJobManagementService.startJobsForMultipleFiles(
+	                printerIp, printerPort, fileDataList, fileNames, availableTray); // Pass tray info
+
+	        StringBuilder response = new StringBuilder();
+	        for (int i = 0; i < jobIds.size(); i++) {
+	            long jobId = jobIds.get(i);
+	            if (jobId == -1L) {
+	                response.append("Failed to process file: ").append(fileNames.get(i)).append("\n");
+	            } else {
+	                response.append("Print job sent successfully using Tray ").append(availableTray).append("! File: ")
+	                        .append(fileNames.get(i)).append(" Job ID: ").append(jobId).append("\n");
+	            }
+	        }
+	        return response.toString();
+	    } catch (Exception e) {
+	       // logger.error("Error processing files: {}", e.getMessage(), e);
+	        return "Error processing files: " + e.getMessage();
+	    }
+	}
+	
+	
+    private Integer getAvailableTray(String printerIp, Integer defaultTray) throws Exception {
+        String trayNameOid = "1.3.6.1.2.1.43.8.2.1.18";
+        String trayStatusOid = "1.3.6.1.2.1.43.8.2.1.10";
+
+        // Fetch tray names and statuses
+        Map<Integer, String> trayStatuses = snmpFetchTrayStatusesAsIntegers(printerIp, trayNameOid, trayStatusOid);
+
+        //logger.debug("Fetched tray statuses: {}", trayStatuses);
+
+        // Check for available trays
+        for (Map.Entry<Integer, String> entry : trayStatuses.entrySet()) {
+            if ("READY".equalsIgnoreCase(entry.getValue()) || "LOADED".equalsIgnoreCase(entry.getValue())) {
+               // logger.debug("Found available tray: {}", entry.getKey());
+                return entry.getKey(); // Return the tray number
+            }
         }
+
+        // Fallback to default tray if specified
+        if (defaultTray != null) {
+           // logger.warn("No READY trays found. Using default tray: {}", defaultTray);
+            return defaultTray;
+        }
+
+        throw new Exception("No available trays for printing and no default tray specified.");
     }
+
 	
 	
-	
+    private Map<Integer, String> snmpFetchTrayStatusesAsIntegers(String printerIp, String trayNameOid, String trayStatusOid) throws Exception {
+        Map<Integer, String> trayStatuses = new HashMap<>();
+
+        // Setup SNMP
+        TransportMapping transport = new DefaultUdpTransportMapping();
+        Snmp snmp = new Snmp(transport);
+        transport.listen();
+        // Community Target
+        CommunityTarget target = new CommunityTarget();
+        target.setCommunity(new OctetString("public")); // Replace "public" with your SNMP community string
+        target.setAddress(GenericAddress.parse("udp:" + printerIp + "/161"));
+        target.setRetries(2);
+        target.setTimeout(1500);
+        target.setVersion(SnmpConstants.version2c);
+
+        // Tray Names and Statuses
+        OID nameOid = new OID(trayNameOid);
+        OID statusOid = new OID(trayStatusOid);
+
+        // Fetch tray names and statuses
+        PDU pdu = new PDU();
+        pdu.add(new VariableBinding(nameOid));
+        pdu.add(new VariableBinding(statusOid));
+        pdu.setType(PDU.GETBULK);
+
+        ResponseEvent responseEvent = snmp.send(pdu, target);
+        if (responseEvent.getResponse() == null) {
+            throw new Exception("SNMP request timed out.");
+        }
+
+        for (VariableBinding vb : responseEvent.getResponse().getVariableBindings()) {
+            String oid = vb.getOid().toString();
+            String value = vb.getVariable().toString();
+
+            // Extract tray number from OID and map to status
+            if (oid.startsWith(trayNameOid)) {
+                int trayNumber = Integer.parseInt(oid.substring(oid.lastIndexOf('.') + 1));
+                trayStatuses.put(trayNumber, value);
+            } else if (oid.startsWith(trayStatusOid)) {
+                int trayNumber = Integer.parseInt(oid.substring(oid.lastIndexOf('.') + 1));
+                trayStatuses.put(trayNumber, value);
+            }
+        }
+
+        snmp.close();
+        return trayStatuses;
+    }
+    
+
 	
 	
     
@@ -74,11 +206,14 @@ public class PrintJobManagementController {
     
     
     @GetMapping("/job/{jobId}/progress")
-    public ResponseEntity<Map<String, Object>> getJobProgress(@PathVariable long jobId) {
-        Map<String, Object> progress = printJobManagementService.getJobProgress(jobId);
-        return ResponseEntity.ok(progress);
+    public ResponseEntity<?> getJobProgress(@PathVariable long jobId) {
+        try {
+            Map<String, Object> progress = printJobManagementService.getJobProgress(jobId);
+            return ResponseEntity.ok(progress);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Job progress not found for job ID: " + jobId);
+        }
     }
-
 
 
     // Pause a job
