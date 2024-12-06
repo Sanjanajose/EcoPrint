@@ -1,50 +1,40 @@
 package com.ecoprint.printmanagement.controller;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import com.ecoprint.printmanagement.model.JobStatus;
-import com.ecoprint.printmanagement.model.PrintEvent;
-import com.ecoprint.printmanagement.model.PrintProcess;
-import com.ecoprint.printmanagement.repository.PrintJobManagementRepository;
-import com.ecoprint.printmanagement.request.PrintEventRequest;
-import com.ecoprint.printmanagement.service.PrintJobManagementService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.springframework.beans.factory.annotation.Autowired;
-
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import org.snmp4j.CommunityTarget;
 import org.snmp4j.PDU;
 import org.snmp4j.Snmp;
 import org.snmp4j.TransportMapping;
 import org.snmp4j.event.ResponseEvent;
 import org.snmp4j.mp.SnmpConstants;
-import org.snmp4j.smi.*;
+import org.snmp4j.smi.GenericAddress;
+import org.snmp4j.smi.OID;
+import org.snmp4j.smi.OctetString;
+import org.snmp4j.smi.VariableBinding;
 import org.snmp4j.transport.DefaultUdpTransportMapping;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.ecoprint.printmanagement.model.JobStatus;
+import com.ecoprint.printmanagement.model.PrintEvent;
+import com.ecoprint.printmanagement.model.PrintProcess;
+import com.ecoprint.printmanagement.repository.PrintJobManagementRepository;
+import com.ecoprint.printmanagement.service.PrintJobManagementService;
 
 
 
@@ -58,6 +48,8 @@ public class PrintJobManagementController {
 	
 	@Autowired	
     private PrintJobManagementRepository printJobManagementRepository;
+	
+	
 
 	@PostMapping("/file")
 	public String sendPrintJobs(        @RequestParam String printerIp,
@@ -246,6 +238,37 @@ public class PrintJobManagementController {
     public String triggerAutoResume() {
         printJobManagementService.autoResumeJobs();
         return "Auto-resume process triggered.";
+    }
+
+    
+    
+    //3. Error Handling for Failed Jobs: (6)
+    @GetMapping("/job/{jobId}/error-status")
+    public ResponseEntity<String> getJobErrorStatus(@PathVariable Long jobId) {
+        try {
+            // Fetch the print event by job ID
+            PrintEvent printEvent = printJobManagementRepository.findById(jobId)
+                    .orElseThrow(() -> new IllegalArgumentException("Job ID not found: " + jobId));
+            
+            String printerIp = printEvent.getPrinterIp();
+            if (printerIp == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Printer IP is missing for job ID: " + jobId);
+            }
+
+            // Call the service method to fetch error status
+            String errorStatus = printJobManagementService.fetchPrinterErrorStatus(printerIp);
+
+            // Optionally, update the database with the error status
+            printEvent.setErrorMessage(errorStatus);
+            printJobManagementRepository.save(printEvent);
+
+            // Return the error status
+            return ResponseEntity.ok("Error Status for Job ID " + jobId + ": " + errorStatus);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to fetch error status for Job ID " + jobId + ": " + e.getMessage());
+        }
     }
 
 

@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -16,14 +17,30 @@ import javax.annotation.PostConstruct;
 
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.ecoprint.printmanagement.integration.PrinterCommunicator;
+import com.ecoprint.printmanagement.model.FailedJob;
 import com.ecoprint.printmanagement.model.JobProgress;
 import com.ecoprint.printmanagement.model.JobStatus;
 import com.ecoprint.printmanagement.model.PrintEvent;
 import com.ecoprint.printmanagement.model.PrintProcess;
+import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.PrintJobManagementRepository;
+import org.snmp4j.CommunityTarget;
+import org.snmp4j.PDU;
+import org.snmp4j.Snmp;
+//import org.snmp4j.SnmpConstants;
+import org.snmp4j.TransportMapping;
+import org.snmp4j.event.ResponseEvent;
+import org.snmp4j.mp.SnmpConstants;
+import org.snmp4j.smi.GenericAddress;
+import org.snmp4j.smi.OID;
+import org.snmp4j.smi.OctetString;
+import org.snmp4j.smi.UdpAddress;
+import org.snmp4j.smi.VariableBinding;
+import org.snmp4j.transport.DefaultUdpTransportMapping;
 
 
 
@@ -35,6 +52,14 @@ public class PrintJobManagementService {
 	
 	@Autowired
 	private PrintJobManagementRepository printJobManagementRepository;
+	
+    @Autowired
+    private PrinterMonitoringService printerMonitoringService; // To fetch printer status
+
+    @Autowired
+    private EmailNotificationService emailNotificationService; // To send email notifications
+
+
 	
     private final AtomicLong jobIdGenerator = new AtomicLong(1); // Start job IDs at 1
     private final ConcurrentHashMap<Long, String> activeJobs = new ConcurrentHashMap<>();
@@ -272,73 +297,82 @@ public class PrintJobManagementService {
     }*/
     
     public long startJob(String printerIp, int printerPort, InputStream fileData, String fileName, Integer tray) throws Exception {
-        long jobId = jobIdGenerator.incrementAndGet(); // Ensure unique ID for every job
-        activeJobs.put(jobId, "PRINTING");
+        long jobId = jobIdGenerator.incrementAndGet(); // Generate a unique Job ID
+        activeJobs.put(jobId, "PENDING"); // Initially set to PENDING
 
-        // Create and save initial PrintEvent
+        // Create and save the initial PrintEvent
         PrintEvent printEvent = new PrintEvent();
         printEvent.setJobId(jobId);
         printEvent.setFileName(fileName);
         printEvent.setPrinterIp(printerIp);
-        printEvent.setStatus("PRINTING");
+        printEvent.setStatus("PENDING"); // Initial Status
         printEvent.setCreatedAt(new Date());
         printEvent.setLastUpdated(LocalDateTime.now());
         printEvent.setProgressPercentage(0.0);
-       /* if (tray != null) {
-            printEvent.setPrinterTray(tray); // Add tray info if provided
-        }*/
+
+        if (tray != null) {
+            // Optional: Save tray info if provided
+           // printEvent.setPrinterTray(tray);
+        }
         printJobManagementRepository.save(printEvent);
 
         try (Socket socket = new Socket(printerIp, printerPort);
              OutputStream outputStream = socket.getOutputStream()) {
 
+            // Update status to PROCESSING
+            printEvent.setStatus("PROCESSING");
+            printJobManagementRepository.save(printEvent);
+
             byte[] buffer = new byte[1024];
             int bytesRead;
-            int totalBytes = 0; // Total bytes processed to simulate progress
-            long fileSize = fileData.available(); // Get total file size for progress calculation
+            int totalBytes = 0; // Track total processed bytes
+            long fileSize = fileData.available(); // Total file size for progress calculation
 
+            // Simulate sending file data and update progress
             while ((bytesRead = fileData.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
 
-                // Increment processed bytes
-                totalBytes += bytesRead;
+                totalBytes += bytesRead; // Update total bytes processed
 
-                // Simulate progress
-                int completedPages = totalBytes / 1024; // Example: Assume 1KB equals 1 page
+                // Update completed pages dynamically
+                int completedPages = totalBytes / 1024; // Example: 1 KB = 1 Page
                 printEvent.setCompletedPages(completedPages);
 
-                // Update progress percentage dynamically
+                // Update progress percentage
                 double progressPercentage = (double) totalBytes / fileSize * 100;
-                printEvent.setProgressPercentage(Math.min(progressPercentage, 100.0)); // Cap at 100%
+                printEvent.setProgressPercentage(Math.min(progressPercentage, 100.0));
 
-                // Update last updated timestamp and save progress
+                // Update timestamp and save progress
                 printEvent.setLastUpdated(LocalDateTime.now());
                 printJobManagementRepository.save(printEvent);
 
-                // Simulate delay to mimic printing
-                Thread.sleep(50); // Adjust as needed
+                // Simulate delay for realistic progress
+                Thread.sleep(50);
             }
 
-            // Mark the job as completed
+            // Mark job as COMPLETED
             activeJobs.put(jobId, "COMPLETED");
             printEvent.setStatus("COMPLETED");
-            printEvent.setProgressPercentage(100.0); // Ensure progress is 100%
+            printEvent.setProgressPercentage(100.0); // Ensure progress is capped at 100%
         } catch (Exception e) {
-            // Handle job failure
+            // Handle job failure and mark as FAILED
             activeJobs.put(jobId, "FAILED");
             printEvent.setStatus("FAILED");
             printEvent.setProgressPercentage(0.0);
+
+            // Record error details
+            printEvent.setErrorMessage(e.getMessage());
             printEvent.setLastUpdated(LocalDateTime.now());
             printJobManagementRepository.save(printEvent);
-            throw new Exception("Failed to send print job to the printer: " + e.getMessage(), e);
+
+            throw new Exception("Failed to send print job: " + e.getMessage(), e);
         } finally {
-            // Save the final status in case of success or failure
+            // Save the final status (COMPLETED or FAILED)
             printJobManagementRepository.save(printEvent);
         }
 
         return jobId;
     }
-
     
     public Map<String, Object> getJobProgress(long jobId) {
         // Fetch the PrintEvent for the given jobId
@@ -358,6 +392,10 @@ public class PrintJobManagementService {
         return progressDetails;
     }
 
+    
+   
+    
+    
 
     
     public List<JobStatus> getActiveJobs() {
@@ -439,7 +477,52 @@ public class PrintJobManagementService {
         });
     }
 
-	
+    @Scheduled(fixedRate = 30000) // Poll every 30 seconds
+    public void monitorPrinterErrors() {
+        try {
+            List<String> printers = getAllPrinters(); // Fetch list of printer IPs
+            for (String printerIp : printers) {
+                String errorStatus = printerMonitoringService.getPrinterErrorStatus(printerIp);
+               /* if (!errorStatus.equalsIgnoreCase("No Error")) {
+                    notifyError(printerIp, errorStatus); // Call notification logic
+                }*/
+            }
+        } catch (Exception e) {
+            System.err.println("Error during printer monitoring: " + e.getMessage());
+        }
+    }
+
+    private List<String> getAllPrinters() {
+        // Fetch printer IPs (from database, properties file, etc.)
+        return List.of("10.255.254.101"); // Example IPs
+    }
+/*
+    private void notifyError(String printerIp, String errorMessage) {
+    	
+        // Notification logic
+        String message = "Error detected on printer " + printerIp + ": " + errorMessage;
+        emailNotificationService.sendEmailNotification(emailRecipient, subject, message); // Send email notification
+        
+    }*/
+
+    
+    /*
+    private void sendAlertToUser(FailedJob failedJob) {
+        Long userId = Long.parseLong(failedJob.getFailedBy()); // Assuming `failedBy` stores the user ID as a String
+        Optional<User> userOptional = userRepository.findById(userId);
+
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            String emailRecipient = user.getEmail();
+            String message = "Failed job " + failedJob.getId() + " has exceeded retry limit. Manual intervention required.";
+            String subject = "Alert Mail for Failed Job " + failedJob.getId();
+
+            notificationService.sendEmailNotification(emailRecipient, subject, message);
+        } else {
+            System.err.println("User not found for ID: " + userId);
+        }
+    }*/
+
 	/**
      * Add a new print job to the system.
      *//*
@@ -473,4 +556,45 @@ public class PrintJobManagementService {
         return printJobRepository.save(printJob);
     }
 */
+    
+    
+    public String fetchPrinterErrorStatus(String printerIp) throws Exception {
+        // OID for printer error status (alerts table)
+        String errorStatusOid = "1.3.6.1.2.1.43.18.1.1.8";
+        
+        // SNMP setup
+        TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping();
+        Snmp snmp = new Snmp(transport);
+        transport.listen();
+        
+        CommunityTarget target = new CommunityTarget();
+        target.setCommunity(new OctetString("public")); // Default SNMP community string
+        target.setAddress(GenericAddress.parse("udp:" + printerIp + "/161"));
+        target.setRetries(2);
+        target.setTimeout(1500);
+        target.setVersion(SnmpConstants.version2c);
+
+        // Prepare SNMP PDU
+        PDU pdu = new PDU();
+        pdu.add(new VariableBinding(new OID(errorStatusOid))); // OID for error status
+        pdu.setType(PDU.GETBULK);
+
+        // Send SNMP request
+        ResponseEvent responseEvent = snmp.send(pdu, target);
+        if (responseEvent.getResponse() == null) {
+            throw new Exception("SNMP request timed out.");
+        }
+
+        // Parse response
+        StringBuilder errorMessages = new StringBuilder();
+        for (VariableBinding vb : responseEvent.getResponse().getVariableBindings()) {
+            errorMessages.append(vb.getVariable().toString()).append("; ");
+        }
+
+        snmp.close();
+
+        // Return consolidated error messages
+        return errorMessages.toString().trim();
+    }
+
 }

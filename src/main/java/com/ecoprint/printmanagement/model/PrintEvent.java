@@ -63,6 +63,10 @@ public class PrintEvent {
 
     @Temporal(TemporalType.TIMESTAMP)
     private Date updatedAt;
+    
+    @Column(name = "error_message", nullable = true)
+    private String errorMessage;
+
 
 
 	public Long getJobId() {
@@ -170,6 +174,16 @@ public class PrintEvent {
 		this.estimatedTimeRemaining = estimatedTimeRemaining;
 	}
 
+	public String getErrorMessage() {
+		return errorMessage;
+	}
+
+	public void setErrorMessage(String errorMessage) {
+		this.errorMessage = errorMessage;
+	}
+
+	
+	
     
 
 
