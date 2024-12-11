@@ -3,11 +3,14 @@ package com.ecoprint.printmanagement.model;
 import java.time.LocalDateTime;
 import java.util.Date;
 
+import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
@@ -27,14 +30,31 @@ public class PrintEvent {
     
     @Column(nullable = false)
     private int printerPort;
+    
+    @Column(name = "printer_job_id")
+
+    private Long printerJobId; // Printer-specific job ID
 
     
     
-    
-    @NotNull
+    public Long getPrinterJobId() {
+		return printerJobId;
+	}
+
+	public void setPrinterJobId(Long printerJobId) {
+		this.printerJobId = printerJobId;
+	}
+
+	@NotNull
     @Column(name = "file_name")
     private String fileName;
     
+
+    @Lob
+    @Column(name = "file_data", columnDefinition = "LONGBLOB", nullable = true)
+    @Basic(fetch = FetchType.EAGER) // Ensure eager loading
+    private byte[] fileData;
+
     @Column(nullable = true)
     private String status; // e.g., PRINTING, PAUSED, COMPLETED, FAILED
 
@@ -180,6 +200,14 @@ public class PrintEvent {
 
 	public void setErrorMessage(String errorMessage) {
 		this.errorMessage = errorMessage;
+	}
+
+	public byte[] getFileData() {
+		return fileData;
+	}
+
+	public void setFileData(byte[] fileData) {
+		this.fileData = fileData;
 	}
 
 	
