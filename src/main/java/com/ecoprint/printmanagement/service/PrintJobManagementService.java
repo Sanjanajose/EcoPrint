@@ -1,5 +1,7 @@
 package com.ecoprint.printmanagement.service;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -32,6 +34,8 @@ import com.ecoprint.printmanagement.model.PrintEvent;
 import com.ecoprint.printmanagement.model.PrintProcess;
 import com.ecoprint.printmanagement.model.User;
 import com.ecoprint.printmanagement.repository.PrintJobManagementRepository;
+import com.ecoprint.printmanagement.repository.SnmpRepository;
+import com.ecoprint.printmanagement.responses.FailedJobResponse;
 
 import org.snmp4j.CommunityTarget;
 import org.snmp4j.PDU;
@@ -49,7 +53,15 @@ import org.snmp4j.smi.VariableBinding;
 import org.snmp4j.transport.DefaultUdpTransportMapping;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import java.awt.Color;
+
+
 
 
 
@@ -69,6 +81,8 @@ public class PrintJobManagementService {
     private EmailNotificationService emailNotificationService; // To send email notifications
     private static final int PAGE_SIZE_BYTES = 1024; // Define the size of one page in bytes
 
+    @Autowired
+    private  SnmpRepository snmpRepository;
 
 
 	
@@ -79,6 +93,7 @@ public class PrintJobManagementService {
     public static final int COMPLETED = 3; // Example status code for "Completed"
     public static final int PROCESSING = 2; // Example status code for "Processing"
     public static final int PENDING = 1; // Example status code for "Pending"
+    
 
     
     @PostConstruct
@@ -417,8 +432,19 @@ public class PrintJobManagementService {
     	    printEvent.setStatus("PENDING");
     	    printEvent.setCreatedAt(new Date());
     	    printEvent.setLastUpdated(LocalDateTime.now());
-    	    printJobManagementRepository.save(printEvent);
+    	    try {
 
+    	        byte[] fileBytes = fileData.readAllBytes(); // Reads all data from InputStream
+
+    	        printEvent.setFileData(fileBytes); // Save file data
+
+    	    } catch (IOException e) {
+
+    	        throw new Exception("Failed to read file data: " + e.getMessage(), e);
+
+    	    }
+
+    	    printJobManagementRepository.save(printEvent);
     	    try {
     	        // Send the print job to the printer
     	        sendPrintDataToPrinter(printerIp, printerPort, fileData);
@@ -447,6 +473,9 @@ public class PrintJobManagementService {
     	        printEvent.setLastUpdated(LocalDateTime.now());
     	        printJobManagementRepository.save(printEvent);
     	        throw new Exception("Failed to process print job: " + e.getMessage(), e);
+    	        
+    	        
+    	        
     	    }
     	    return jobId;
     	}
@@ -536,12 +565,84 @@ public class PrintJobManagementService {
     
 
     
-    public List<JobStatus> getActiveJobs() {
-        return activeJobs.entrySet()
-                .stream()
-                .map(entry -> new JobStatus(entry.getKey(), entry.getValue()))
+  /*  
+    public List<PrintEvent> getActiveJobs(String printerIp) {
+        if (printerIp == null || printerIp.isEmpty()) {
+            throw new IllegalArgumentException("Printer IP cannot be null or empty.");
+        }
+        return snmpRepository.getJobStates(printerIp).entrySet().stream()
+                .filter(entry -> entry.getValue() == 11) // State "eProcessing" (Printing)
+                .map(entry -> new PrintEvent(entry.getKey(), "Printing"))
                 .collect(Collectors.toList());
     }
+*/
+    
+    public List<PrintEvent> getActiveJobs(String printerIp) {
+        // Fetch job states from SNMP
+        Map<String, Integer> jobStates = snmpRepository.getJobStates(printerIp);
+        List<PrintEvent> activeJobs = new ArrayList<>();
+
+        // Fetch active jobs from the database based on printer_job_id
+        Integer printerJobId = getCurrentPrintingJobId(printerIp);
+
+        List<PrintEvent> dbActiveJobs = printJobManagementRepository.findActiveJobsByPrinterJobId(printerJobId);
+
+        // Add jobs from the database to the response
+        activeJobs.addAll(dbActiveJobs);
+
+        // Process SNMP data and add jobs in the "Processing" state
+        for (Map.Entry<String, Integer> entry : jobStates.entrySet()) {
+            // Only add jobs in the "Processing" state if they are not already in the database
+            if (entry.getValue() == 11 && dbActiveJobs.stream().noneMatch(job -> job.getPrinterJobId().equals(entry.getKey()))) {
+                activeJobs.add(new PrintEvent(entry.getKey(), "Printing"));
+            }
+        }
+
+        return activeJobs;
+    }
+    
+    
+    
+    
+    public List<PrintEvent> getActiveJobs(Integer printerJobId) {
+        // Fetch active jobs from the database
+        List<PrintEvent> dbActiveJobs = printJobManagementRepository.findActiveJobsByPrinterJobId(printerJobId);
+
+        // Initialize the response list
+        List<PrintEvent> activeJobs = new ArrayList<>(dbActiveJobs);
+
+        // Fetch job states from SNMP
+        Map<String, Integer> jobStates = snmpRepository.getJobStates(printerJobId.toString());
+
+        // Add SNMP jobs only if they are not already in the database list
+        for (Map.Entry<String, Integer> entry : jobStates.entrySet()) {
+            // Only add jobs in the "Processing" state
+            if (entry.getValue() == 11 && dbActiveJobs.stream().noneMatch(job -> job.getPrinterJobId().equals(Integer.parseInt(entry.getKey())))) {
+                activeJobs.add(new PrintEvent(entry.getKey(), "Printing"));
+            }
+        }
+
+        return activeJobs;
+    }
+
+/*
+    public List<PrintEvent> getActiveJobs(String printerIp) {
+        Map<String, Integer> jobStates = snmpRepository.getJobStates(printerIp);
+        List<PrintEvent> activeJobs = new ArrayList<>();
+
+        for (Map.Entry<String, Integer> entry : jobStates.entrySet()) {
+            // Only add jobs in the "Processing" state
+            if (entry.getValue() == 11) {
+                activeJobs.add(new PrintEvent(entry.getKey(), "Printing"));
+            }
+        }
+
+        return activeJobs;
+    }
+  */  
+    
+    
+
 
     public PrintProcess getPrintProcessById(long jobId) {
         if (!printProcessStorage.containsKey(jobId)) {
@@ -616,29 +717,124 @@ public class PrintJobManagementService {
         }
     }
 
-    public String resumeJob(long jobId) {
-        PrintEvent job = printJobManagementRepository.findById(jobId)
-                .orElseThrow(() -> new IllegalArgumentException("Job ID not found: " + jobId));
+    
+    public boolean pausePrintJob(String printerIp, String jobId) {
+        try {
+            System.out.println("Entered into PrintJobManagementService:::" + printerIp + "::::" + jobId);
 
+            // Initialize SNMP client
+            Snmp snmp = new Snmp(new DefaultUdpTransportMapping());
+            snmp.listen();
+
+            // Configure the SNMP target
+            CommunityTarget target = new CommunityTarget();
+            target.setCommunity(new OctetString("private")); // Use the "private" community string
+            target.setAddress(GenericAddress.parse("udp:" + printerIp + "/161")); // Printer IP and SNMP port
+            target.setRetries(20); // Retry count
+            target.setTimeout(5000); // Timeout in milliseconds
+            target.setVersion(SnmpConstants.version2c); // SNMP version 2c
+
+            // OID for pausing a print job
+          //  OID pauseJobOid = new OID("1.3.6.1.4.1.11.2.3.9.4.2.1.1.6.1.3.0"); // Replace with the actual OID for pause
+            OID pauseJobOid = new OID("1.3.6.1.4.1.11.2.3.9.4.2.1.1.6.1.2.0"); // Replace with the actual OID for pause
+
+            // Create the PDU for the SNMP SET request
+            PDU pdu = new PDU();
+            pdu.add(new VariableBinding(pauseJobOid, new Integer32(Integer.parseInt(jobId))));
+            pdu.setType(PDU.SET); // SNMP SET operation
+
+            // Send the SNMP request
+            System.out.println("Sending SNMP SET request to pause job...");
+            ResponseEvent response = snmp.send(pdu, target);
+
+            // Handle the response
+            if (response.getResponse() == null) {
+                System.out.println("SNMP Request timed out while pausing the job.");
+                return false;
+            }
+
+            System.out.println("Job pausing response: " + response.getResponse());
+
+            // Update the job status in the database
+            PrintEvent printEvent = printJobManagementRepository.findByPrinterJobId(Long.parseLong(jobId));
+            if (printEvent != null) {
+                printEvent.setStatus("PAUSED");
+                printEvent.setLastUpdated(LocalDateTime.now());
+                printJobManagementRepository.save(printEvent);
+            } else {
+                System.err.println("No record found for Printer Job ID: " + jobId);
+            }
+
+            snmp.close();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public String resumeJob(long jobId) {
+        // Fetch the job details
+        PrintEvent job = printJobManagementRepository.findByPrinterJobId(jobId);
+        if (job == null) {
+            throw new IllegalArgumentException("Job ID not found: " + jobId);
+        }
+
+        // Ensure the job is in PAUSED state
         if (!"PAUSED".equalsIgnoreCase(job.getStatus())) {
             throw new IllegalStateException("Cannot resume a job that is not in PAUSED state.");
         }
 
-        job.setStatus("PROCESSING");
-        job.setLastUpdated(LocalDateTime.now());
-        printJobManagementRepository.save(job);
+        try {
+            // Update the job status to PROCESSING
+            job.setStatus("PROCESSING");
+            job.setLastUpdated(LocalDateTime.now());
+            printJobManagementRepository.save(job);
 
-        // Optionally: Trigger background process to continue printing
-        triggerPrintJob(job);
+            // Printing logic: Resume from the last completed page
+            int bytesToSkip = job.getCompletedPages() * PAGE_SIZE_BYTES; // Assuming PAGE_SIZE_BYTES is defined
+            InputStream fileData = fetchJobFile(job.getJobId()); // Fetch the file associated with the job
+            fileData.skip(bytesToSkip); // Skip bytes to resume printing from the correct point
 
-        return "Job " + jobId + " has been resumed.";
+            try (Socket socket = new Socket(job.getPrinterIp(), 9100);
+                 OutputStream outputStream = socket.getOutputStream()) {
+
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+
+                // Stream data to the printer
+                while ((bytesRead = fileData.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                    Thread.sleep(50); // Simulate time per page if needed
+                }
+
+                // Update status to COMPLETED after successful printing
+                job.setStatus("COMPLETED");
+                job.setProgressPercentage(100.0);
+                job.setLastUpdated(LocalDateTime.now());
+            } catch (Exception e) {
+                // Handle any printing errors
+                job.setStatus("FAILED");
+                job.setErrorMessage(e.getMessage());
+                job.setLastUpdated(LocalDateTime.now());
+                throw new Exception("Failed to resume the print job: " + e.getMessage(), e);
+            } finally {
+                // Save the job status
+                printJobManagementRepository.save(job);
+            }
+
+            return "Job " + jobId + " has been resumed and is now printing.";
+        } catch (Exception e) {
+            throw new RuntimeException("Error resuming job: " + e.getMessage(), e);
+        }
     }
+
 
 
     
     
 //below code is working fine    
-    public boolean cancelPrintJob(String printerIp, String jobId) {
+  /*  public boolean cancelPrintJob(String printerIp, String jobId) {
         try {
             System.out.println("Entered into PrintJobManagementService:::" + printerIp + "::::" + jobId);
 
@@ -681,7 +877,64 @@ public class PrintJobManagementService {
             e.printStackTrace();
             return false;
         }
+    }*/
+    
+    public boolean cancelPrintJob(String printerIp, String jobId) {
+        try {
+            System.out.println("Entered into PrintJobManagementService:::" + printerIp + "::::" + jobId);
+
+            // Initialize SNMP client
+            Snmp snmp = new Snmp(new DefaultUdpTransportMapping());
+            snmp.listen();
+
+            // Configure the SNMP target
+            CommunityTarget target = new CommunityTarget();
+            target.setCommunity(new OctetString("private")); // Use the "private" community string
+            target.setAddress(GenericAddress.parse("udp:" + printerIp + "/161")); // Printer IP and SNMP port
+            target.setRetries(20); // Retry count
+            target.setTimeout(5000); // Timeout in milliseconds
+            target.setVersion(SnmpConstants.version2c); // SNMP version 2c
+
+            // OID for canceling a print job
+            OID cancelJobOid = new OID("1.3.6.1.4.1.11.2.3.9.4.2.1.1.6.1.2.0");
+            
+
+
+            // Create the PDU for the SNMP SET request
+            PDU pdu = new PDU();
+            pdu.add(new VariableBinding(cancelJobOid, new Integer32(Integer.parseInt(jobId))));
+            pdu.setType(PDU.SET); // SNMP SET operation
+
+            // Send the SNMP request
+            System.out.println("Sending SNMP SET request to cancel job...");
+            ResponseEvent response = snmp.send(pdu, target);
+
+            // Handle the response
+            if (response.getResponse() == null) {
+                System.out.println("SNMP Request timed out while canceling the job.");
+                return false;
+            }
+
+            System.out.println("Job cancellation response: " + response.getResponse());
+
+            // Update the job status in the database
+            PrintEvent printEvent = printJobManagementRepository.findByPrinterJobId(Long.parseLong(jobId));
+            if (printEvent != null) {
+                printEvent.setStatus("CANCELLED");
+                printEvent.setLastUpdated(LocalDateTime.now());
+                printJobManagementRepository.save(printEvent);
+            } else {
+                System.err.println("No record found for Printer Job ID: " + jobId);
+            }
+
+            snmp.close();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
+
 /*
     
     public boolean cancelPrintJobDUMMY(String printerIp, String jobId) {
@@ -1125,7 +1378,6 @@ public class PrintJobManagementService {
         document.close();
     }
 
-
     
     public Integer getCurrentPrintingJobId(String printerIp) {
         try {
@@ -1183,6 +1435,32 @@ public class PrintJobManagementService {
             e.printStackTrace();
             return null;
         }
+    }
+    
+    private FailedJobResponse mapToFailedJobResponse(PrintEvent printEvent) {
+        FailedJobResponse response = new FailedJobResponse();
+        response.setId(printEvent.getJobId());
+        response.setPrintJobId(printEvent.getPrinterJobId());
+        response.setFailureReason("Job marked as FAILED"); // Example reason
+        response.setErrorDetails(printEvent.getErrorMessage());
+        //response.setFailedBy(printEvent.get); // Or add logic to fetch responsible user/admin
+        response.setFailedAt(printEvent.getLastUpdated());
+        return response;
+    }
+
+  /*  
+    public List<PrintEvent> getFailedJobs() {
+        // Fetch failed jobs from the repository
+        return printJobManagementRepository.findFailedJobs();
+    }*/
+    
+    
+    public List<FailedJobResponse> getFailedJobs() {
+        // Fetch failed jobs from the repository
+        List<PrintEvent> failedJobs = printJobManagementRepository.findFailedJobs();
+
+        // Map to FailedJobResponse
+        return failedJobs.stream().map(this::mapToFailedJobResponse).toList();
     }
 
 }

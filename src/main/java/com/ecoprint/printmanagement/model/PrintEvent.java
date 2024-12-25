@@ -212,6 +212,17 @@ public class PrintEvent {
 
 	
 	
+	public PrintEvent(String jobId, String status) {
+	    if (jobId == null || jobId.trim().isEmpty()) {
+	        throw new IllegalArgumentException("Job ID cannot be null or empty");
+	    }
+	    this.printerJobId = Long.parseLong(jobId); // Convert to Long
+	    this.status = status;
+	}
+
+	
+    public PrintEvent() {
+    }
     
 
 

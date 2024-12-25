@@ -14,6 +14,17 @@ import org.apache.tika.Tika;
 import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.snmp4j.CommunityTarget;
+import org.snmp4j.PDU;
+import org.snmp4j.Snmp;
+import org.snmp4j.event.ResponseEvent;
+import org.snmp4j.mp.SnmpConstants;
+import org.snmp4j.smi.GenericAddress;
+import org.snmp4j.smi.Integer32;
+import org.snmp4j.smi.OID;
+import org.snmp4j.smi.OctetString;
+import org.snmp4j.smi.VariableBinding;
+import org.snmp4j.transport.DefaultUdpTransportMapping;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -94,6 +105,8 @@ public class PrintJobService {
 	private final UserRepository userrepository;
 
     private final SubmitJobRepository submitJobRepository;
+    
+
 
 	@Autowired
 	private NotificationLogRepository notificationLogRepository;
@@ -695,6 +708,80 @@ this.pushNotificationService = pushNotificationService;
 
 	    saveFailedJob(failedJob); // Method to save failed job in FailedJob table
 	}
+
+	
+	/*
+    public boolean cancelPrintJob(String printerIp, String jobId) {
+        try {
+            System.out.println("Entered into PrintJobManagementService:::" + printerIp + "::::" + jobId);
+
+            // Initialize SNMP client
+            Snmp snmp = new Snmp(new DefaultUdpTransportMapping());
+            snmp.listen();
+
+            // Configure the SNMP target
+            CommunityTarget target = new CommunityTarget();
+            target.setCommunity(new OctetString("private")); // Use the "private" community string
+            target.setAddress(GenericAddress.parse("udp:" + printerIp + "/161")); // Printer IP and SNMP port
+            target.setRetries(20); // Retry count
+            target.setTimeout(5000); // Timeout in milliseconds
+            target.setVersion(SnmpConstants.version2c); // SNMP version 2c
+
+            // OID to check the status of the specific job
+            OID jobStatusOid = new OID("1.3.6.1.4.1.11.2.3.9.4.2.1.1.6.5.19." + jobId + ".0");
+
+            // Create the PDU for the SNMP GET request
+            PDU getPdu = new PDU();
+            getPdu.add(new VariableBinding(jobStatusOid)); // Add the OID to fetch the job status
+            getPdu.setType(PDU.GET);
+
+            // Send the SNMP GET request
+            System.out.println("Sending SNMP GET request to fetch job status...");
+            ResponseEvent getResponse = snmp.get(getPdu, target);
+
+            // Handle the response
+            if (getResponse.getResponse() == null) {
+                System.out.println("SNMP Request timed out while fetching job status.");
+                return false;
+            }
+
+            // Extract the status from the response
+            VariableBinding vb = getResponse.getResponse().get(0);
+            int jobStatus = vb.getVariable().toInt();
+            System.out.println("Job status retrieved: " + jobStatus);
+
+            // Check if the job is completed
+            if (jobStatus == COMPLETED) {
+                throw new IllegalStateException("Cannot cancel a job that is already completed or deleted.");
+            }
+
+            // OID for canceling a print job
+            OID cancelJobOid = new OID("1.3.6.1.4.1.11.2.3.9.4.2.1.1.6.1.2.0");
+
+            // Create the PDU for the SNMP SET request
+            PDU setPdu = new PDU();
+            setPdu.add(new VariableBinding(cancelJobOid, new Integer32(Integer.parseInt(jobId)))); // Add the OID and the job ID
+            setPdu.setType(PDU.SET); // SNMP SET operation
+
+            // Send the SNMP SET request to cancel the job
+            System.out.println("Sending SNMP SET request to cancel job...");
+            ResponseEvent setResponse = snmp.send(setPdu, target);
+
+            // Handle the response
+            if (setResponse.getResponse() == null) {
+                System.out.println("SNMP Request timed out while canceling the job.");
+                return false;
+            }
+
+            System.out.println("Job cancellation response: " + setResponse.getResponse());
+            snmp.close();
+            return true;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }*/
 
 	
 	private void saveFailedJob(FailedJob failedJob) {

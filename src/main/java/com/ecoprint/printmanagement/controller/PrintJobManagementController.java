@@ -45,7 +45,7 @@ import com.ecoprint.printmanagement.model.PrintEvent;
 import com.ecoprint.printmanagement.model.PrintProcess;
 import com.ecoprint.printmanagement.model.PrintTask;
 import com.ecoprint.printmanagement.repository.PrintJobManagementRepository;
-import com.ecoprint.printmanagement.service.IppService;
+import com.ecoprint.printmanagement.responses.FailedJobResponse;
 import com.ecoprint.printmanagement.service.PrintJobManagementService;
 import com.ecoprint.printmanagement.service.PrintTaskService;
 import com.ecoprint.printmanagement.service.SNMPService;
@@ -65,9 +65,9 @@ public class PrintJobManagementController {
 
 	@Autowired
 	private PrintTaskService printTaskService;
-	@Autowired
-	private IppService ippService;
-/*
+	//@Autowired
+	//private IppService ippService;
+
 	@PostMapping("/file")
 	public String sendPrintJobs(
 	    @RequestParam String printerIp,
@@ -109,9 +109,9 @@ public class PrintJobManagementController {
 	    } catch (Exception e) {
 	        return "Error processing files: " + e.getMessage();
 	    }
-	}*/
+	}
 
-	
+	/*
 	@PostMapping("/file")
 	public String sendPrintJobs(
 	    @RequestParam String printerIp,
@@ -171,7 +171,7 @@ public class PrintJobManagementController {
 	    } catch (Exception e) {
 	        return "Error processing files: " + e.getMessage();
 	    }
-	}
+	}*/
 
 	private Integer getAvailableTray(String printerIp, Integer defaultTray) throws Exception {
 		String trayNameOid = "1.3.6.1.2.1.43.8.2.1.18";
@@ -282,10 +282,23 @@ public class PrintJobManagementController {
 	}
 
 	// Fetch active jobs
-	@GetMapping("/active/jobs")
+	/*@GetMapping("/active/jobs")
 	public List<JobStatus> getActiveJobs() {
 		return printJobManagementService.getActiveJobs();
+	}*/
+	
+	
+	@GetMapping("/active/jobs")
+	public List<PrintEvent> getActiveJobs(@RequestParam String printerIp) {
+	    if (printerIp == null || printerIp.isEmpty()) {
+	        throw new IllegalArgumentException("Printer IP cannot be null or empty.");
+	    }
+	    
+        Integer printerJobId = printJobManagementService.getCurrentPrintingJobId(printerIp);
+
+	    return printJobManagementService.getActiveJobs(printerJobId);
 	}
+
 
 	// INSTEAD OF THIS I NEED ERROR STATUS.
 	@GetMapping("/job/{jobId}/status")
@@ -441,36 +454,42 @@ public class PrintJobManagementController {
 		String oid = "1.3.6.1.2.1.43.16.5.1.2"; // OID for tray statuses
 		return snmpService.fetchTrayStatuses(printerIp, oid);
 	}
-
-	@PostMapping("/submit")
-	public ResponseEntity<?> submitPrintTask(@RequestParam("file") MultipartFile file,
-			@RequestParam("totalPages") int totalPages) {
-		PrintTask printTask = printTaskService.createPrintTask(file, totalPages);
-		return ResponseEntity.ok(Map.of("message", "Print task submitted successfully", "taskId", printTask.getId()));
-	}
 	
-	
-	
-	 
+	@PostMapping("/{printerIp}/pause/{jobId}")
+	public ResponseEntity<String> pausePrintJob(
+	        @PathVariable String printerIp,
+	        @PathVariable String jobId) {
+	    try {
+	        System.out.println("Entered into pausePrintJob in Controller:::" + printerIp + "::::" + jobId);
 
+	        boolean isPaused = printJobManagementService.pausePrintJob(printerIp, jobId);
 
-	 
-	 
-	    @PostMapping("/{jobId}/pause")
+	        System.out.println("After isPaused:::" + isPaused);
 
-	    public String pausePrintJob(@PathVariable int jobId) {
-
-	        return ippService.pausePrintJob(jobId);
-
+	        if (isPaused) {
+	            return ResponseEntity.ok("Print job " + jobId + " paused successfully.");
+	        } else {
+	            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+	                    .body("Failed to pause print job " + jobId);
+	        }
+	    } catch (IllegalStateException e) {
+	        System.err.println("Error: " + e.getMessage());
+	        e.printStackTrace();
+	        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+	                .body("Error: " + e.getMessage() + "\nStackTrace: " + e.getStackTrace());
+	    } catch (Exception e) {
+	        System.err.println("Unexpected Error: " + e.getMessage());
+	        e.printStackTrace();
+	        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+	                .body("Unexpected Error: " + e.getMessage() + "\nStackTrace: " + e.getStackTrace());
 	    }
+	}
+
 	    
 	    
 	    @GetMapping("/{printerIp}/current-job")
 	    public ResponseEntity<String> getCurrentPrintingJob(@PathVariable String printerIp) {
-	        System.out.println("Fetching current printing job for printer: " + printerIp);
-
 	        Integer currentJobId = printJobManagementService.getCurrentPrintingJobId(printerIp);
-
 	        if (currentJobId == null) {
 	            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 	                    .body("Failed to fetch the current printing job.");
@@ -493,6 +512,12 @@ public class PrintJobManagementController {
 	        return sb.toString();
 	    }
 
-	 
+	    
+	    @GetMapping("/failed-jobs")
+	    public ResponseEntity<List<FailedJobResponse>> getFailedJobs() {
+	        List<FailedJobResponse> failedJobs = printJobManagementService.getFailedJobs();
+	        return ResponseEntity.ok(failedJobs);
+	    }
+
 
 }
